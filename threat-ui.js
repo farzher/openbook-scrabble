@@ -19,14 +19,16 @@ panel?.append(tip)
 
 let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
-let bgWorkers=[],surveyQueue=[],refineQueue=[],bgQueued=new Set(),bgDispatch=0
+let bgWorkers=[],surveyQueue=[],refineQueue=[],priorityQueue=[],bgQueued=new Set(),bgDispatch=0
 const SIDES=['you','opponent']
 const MAX_SAMPLES=96
 const CACHE_LIMIT=512
 const SAMPLE_STAGES=[1,4,16,48,96]
 const CORES=navigator.hardwareConcurrency||4
-// Keep foreground interaction smooth while still using idle cores aggressively.
-const BG_WORKERS=Math.max(1,Math.min(6,Math.floor((CORES-1)/2)))
+const PRIORITY_ROWS=10
+// Workers do not execute on the UI thread. Reserve two logical cores for the
+// browser/OS and use the rest, up to eight, for continuous EV refinement.
+const BG_WORKERS=Math.max(1,Math.min(8,CORES-2))
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
@@ -133,10 +135,17 @@ function queueBackground(base,samples){
   if(bgQueued.has(token))return
   const job={...base,samples,token}
   bgQueued.add(token)
-  if(samples===1){
+  const stage=SAMPLE_STAGES.indexOf(samples)
+
+  // The first screenful gets deeper estimates early, but the survey queue
+  // still advances so every rendered row receives an automatic estimate.
+  if(base.rank<PRIORITY_ROWS&&samples>1){
+    job.priority=base.rank+stage*PRIORITY_ROWS
+    priorityQueue.push(job)
+    priorityQueue.sort((a,b)=>a.priority-b.priority||a.rank-b.rank)
+  }else if(samples===1){
     surveyQueue.push(job)
   }else{
-    const stage=SAMPLE_STAGES.indexOf(samples)
     job.priority=base.rank+stage*10
     refineQueue.push(job)
     refineQueue.sort((a,b)=>a.priority-b.priority||a.rank-b.rank)
@@ -199,12 +208,12 @@ function makeBackgroundWorker(words){
   return slot
 }
 function takeBackgroundJob(){
-  while(surveyQueue.length||refineQueue.length){
+  while(surveyQueue.length||priorityQueue.length||refineQueue.length){
     let job
-    // While rough estimates remain, spend roughly 3/4 of worker starts on
-    // breadth and 1/4 deepening the highest-ranked moves already surveyed.
-    if(surveyQueue.length&&(!refineQueue.length||bgDispatch++%4!==3))job=surveyQueue.shift()
-    else job=refineQueue.shift()||surveyQueue.shift()
+    // Before every row has a rough value, alternate three breadth jobs with
+    // one top-row refinement. After that, refinement runs continuously.
+    if(surveyQueue.length&&bgDispatch++%4!==3)job=surveyQueue.shift()
+    else job=priorityQueue.shift()||refineQueue.shift()||surveyQueue.shift()
 
     if(!job)continue
     if(job.turnKey!==cacheTurn){bgQueued.delete(job.token);continue}
@@ -231,6 +240,9 @@ function pumpBackground(){
 
     const current=cache.get(job.key)
     const id=++request
+    document.dispatchEvent(new CustomEvent('openbook-move-ev-work',{detail:{
+      revision:job.revision,moveKey:job.moveKey,samples:sampleDepth(current?.sides),target:job.samples
+    }}))
     slot.busy=true
     slot.id=id
     slot.key=job.key
@@ -251,6 +263,11 @@ function pumpBackground(){
 }
 function dropQueued(cacheKey){
   surveyQueue=surveyQueue.filter(job=>{
+    if(job.key!==cacheKey)return true
+    bgQueued.delete(job.token)
+    return false
+  })
+  priorityQueue=priorityQueue.filter(job=>{
     if(job.key!==cacheKey)return true
     bgQueued.delete(job.token)
     return false
@@ -324,6 +341,7 @@ function resetTurnCache(turnKey){
     slot.sides={}
   }
   surveyQueue=[]
+  priorityQueue=[]
   refineQueue=[]
   bgQueued.clear()
   bgDispatch=0
