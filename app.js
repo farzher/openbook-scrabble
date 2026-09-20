@@ -594,29 +594,25 @@ function applyMoveEvRow(moveKey){
   const samples=Math.max(1,ev.samples||1)
   const confidence=Math.min(1,Math.sqrt(samples/24))
   const progress=ev.done?100:Math.min(99,Math.sqrt(samples/96)*100)
-  const neutral=Math.abs(diff)<.5
-  const strength=Math.min(1,Math.abs(diff)/25)*confidence
 
-  row.classList.remove('ev-pending')
+  // EV color is continuous: red -> purple -> blue. Nearby values remain
+  // visibly purple instead of falling into a separate gray "neutral" bucket.
+  const purple=[151,92,255]
+  const target=diff>=0?[73,154,255]:[255,103,93]
+  const mix=Math.min(1,Math.abs(diff)/14)
+  const rgb=purple.map((v,i)=>Math.round(v+(target[i]-v)*mix))
+  const [r,g,b]=rgb
+  const alpha=.07+confidence*.055+mix*confidence*.13
+  const edge=.34+confidence*.24+mix*confidence*.24
+  const progressAlpha=.58+confidence*.32
+
+  row.classList.remove('ev-pending','ev-neutral')
   row.classList.add('ev-ready')
-  row.classList.toggle('ev-neutral',neutral)
   row.classList.toggle('ev-complete',!!ev.done)
   row.style.setProperty('--move-ev-progress',`${progress.toFixed(1)}%`)
-
-  if(neutral){
-    row.style.setProperty('--move-ev-bg','linear-gradient(90deg,rgba(181,195,187,.055),rgba(181,195,187,.012) 72%,transparent)')
-    row.style.setProperty('--move-ev-edge','rgba(183,199,190,.30)')
-    row.style.setProperty('--move-ev-progress-color','rgba(185,202,192,.72)')
-  }else{
-    const blue=diff>0
-    const alpha=.035+strength*.20
-    const edge=.28+strength*.52
-    row.style.setProperty('--move-ev-bg',blue
-      ?`linear-gradient(90deg,rgba(73,154,255,${alpha}),rgba(73,154,255,${alpha*.18}) 70%,transparent)`
-      :`linear-gradient(90deg,rgba(255,103,93,${alpha}),rgba(255,103,93,${alpha*.18}) 70%,transparent)`)
-    row.style.setProperty('--move-ev-edge',blue?`rgba(91,170,255,${edge})`:`rgba(255,113,103,${edge})`)
-    row.style.setProperty('--move-ev-progress-color',blue?'rgba(100,178,255,.88)':'rgba(255,126,116,.88)')
-  }
+  row.style.setProperty('--move-ev-bg',`linear-gradient(90deg,rgba(${r},${g},${b},${alpha}),rgba(${r},${g},${b},${alpha*.18}) 70%,transparent)`)
+  row.style.setProperty('--move-ev-edge',`rgba(${r},${g},${b},${edge})`)
+  row.style.setProperty('--move-ev-progress-color',`rgba(${r},${g},${b},${progressAlpha})`)
   row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)} · ${ev.done?'refined':ev.samples+' / 96 samples'}`
 }
 function bindMoveRows(){
