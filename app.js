@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats} from './threat-ui.js?v=ev-existingtile1'
+import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-prefetch1'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -19,7 +19,7 @@ const els={
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],moveByKey=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
+let moves=[],moveByKey=new Map(),moveEv=new Map(),moveRows=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -374,7 +374,7 @@ function setState(next){
     pendingExchange=null
   }
   state=next;timerSyncAt=performance.now()
-  if(changed){selected=null;visibleMoves=250;els.playScore.textContent=''}
+  if(changed){selected=null;visibleMoves=250;moveEv.clear();moveRows.clear();els.playScore.textContent=''}
   render();startClockRendering()
   if(changed)computeMoves()
   if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
@@ -551,8 +551,46 @@ async function computeMoves(){
   if(run!==computing||!state)return
   moves=found
   moveByKey=new Map(moves.map(m=>[keyOfMove(m),m]))
+  moveEv.clear()
   renderMoves()
+  prefetchThreats(state,moves,myId)
 }
+function applyMoveEvRow(moveKey){
+  const row=moveRows.get(moveKey),ev=moveEv.get(moveKey)
+  if(!row||!ev)return
+  const diff=ev.diff
+  const strength=Math.min(1,Math.abs(diff)/25)
+  if(strength<.03){
+    row.classList.remove('ev-ready')
+    row.style.removeProperty('--move-ev-bg')
+    row.style.removeProperty('--move-ev-edge')
+    return
+  }
+  const blue=diff>0
+  const alpha=.035+strength*.20
+  const edge=.28+strength*.52
+  row.style.setProperty('--move-ev-bg',blue
+    ?`linear-gradient(90deg,rgba(73,154,255,${alpha}),rgba(73,154,255,${alpha*.18}) 70%,transparent)`
+    :`linear-gradient(90deg,rgba(255,103,93,${alpha}),rgba(255,103,93,${alpha*.18}) 70%,transparent)`)
+  row.style.setProperty('--move-ev-edge',blue?`rgba(91,170,255,${edge})`:`rgba(255,113,103,${edge})`)
+  row.classList.add('ev-ready')
+  row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)}`
+}
+function bindMoveRows(){
+  moveRows=new Map()
+  for(const row of els.moves.querySelectorAll('.move-row[data-key]')){
+    const moveKey=decodeURIComponent(row.dataset.key)
+    moveRows.set(moveKey,row)
+    applyMoveEvRow(moveKey)
+  }
+}
+document.addEventListener('openbook-move-ev',e=>{
+  const ev=e.detail
+  if(!ev||ev.revision!==state?.revision)return
+  moveEv.set(ev.moveKey,ev)
+  applyMoveEvRow(ev.moveKey)
+})
+
 function renderMoves(){
   if(!state)return
   const focusedKey=els.moves.contains(document.activeElement)?document.activeElement.dataset.key:null
@@ -582,6 +620,7 @@ function renderMoves(){
       <div class="move-score">${m.score}</div>
     </button>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
+  bindMoveRows()
   if(focusedKey){
     const target=[...els.moves.querySelectorAll('[data-key]')].find(b=>b.dataset.key===focusedKey)
     target?.focus({preventScroll:true})
@@ -743,7 +782,7 @@ function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
   computing++
-  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];moveByKey.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
+  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];moveByKey.clear();moveEv.clear();moveRows.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
