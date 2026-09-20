@@ -137,22 +137,21 @@ function restoreTitles(){
 function hideTip(){
   active=null
   if(tip)tip.hidden=true
+  panel?.classList.remove('inspecting')
   board?.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
   board?.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
 }
 function showTip(index){
   if(resultsKey!==key||!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
   active={index}
-  tip.innerHTML=`<div class="heat-tip-head"><b>${coord(index)}</b><small>Expected pts</small></div>`+SIDES.map(side=>{
-    const data=results[side],result=data?.result
-    const readyNow=!!result?.samples
-    const note=readyNow?(data.exact?'exact':`${result.samples} racks`):(data?.error?'unavailable':'—')
-    return `<div class="dual-ev" data-side="${side}">
-      <span>${side==='you'?'You':'Opponent'} <small>${note}</small></span>
-      <strong>${readyNow?evAt(result,index).toFixed(1):'—'}</strong>
-      <small class="dual-phase">${sidePhase(side)}</small>
-    </div>`
-  }).join('')
+  const opponent=context?.state?.players.find(p=>p.id!==context.myId)
+  const youEv=results.you?.result?.samples?evAt(results.you.result,index):null
+  const oppEv=results.opponent?.result?.samples?evAt(results.opponent.result,index):null
+  tip.innerHTML=`<div class="heat-tip-square"><b>${coord(index)}</b><span>Square EV</span></div>
+    <div class="heat-tip-player you"><span>You</span><strong>${youEv===null?'—':youEv.toFixed(1)}</strong></div>
+    <i class="heat-tip-vs">vs</i>
+    <div class="heat-tip-player opponent"><span>${opponent?.name||'Opponent'}</span><strong>${oppEv===null?'—':oppEv.toFixed(1)}</strong></div>`
+  panel?.classList.add('inspecting')
   tip.hidden=false
   board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
   board.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
