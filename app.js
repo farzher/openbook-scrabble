@@ -790,7 +790,7 @@ function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
   computing++
-  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];moveByKey.clear();moveEv.clear();moveRows.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
+  lobby?.close();lobby=null;stopClockRendering();state=null;hostGame=null;moves=[];moveByKey.clear();moveEv.clear();moveRows.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting';directPingMs=null
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
@@ -850,19 +850,43 @@ function updateClocks(){
   els.clockStrip.innerHTML=state.players.map((p,i)=>`<div class="game-clock ${t.active===i&&state.status==='playing'?'active':''} ${clocks[i]<=30_000?'low':''}"><span>${p.id===myId?'YOU':escapeHtml(p.name)}</span><b>${formatClock(clocks[i])}</b>${mode?'<i>F</i>':''}</div>`).join(divider)
   document.querySelectorAll('[data-side-clock]').forEach(x=>{const i=+x.dataset.sideClock;x.textContent=formatClock(clocks[i]);x.classList.toggle('low',clocks[i]<=30_000)})
 }
+function stopClockRendering(){
+  clearTimeout(timerFrame)
+  clearInterval(hostTimerWatch)
+  timerFrame=0
+  hostTimerWatch=null
+}
 function startClockRendering(){
-  clearInterval(timerFrame)
-  const tick=()=>{
-    updateClocks()
-    if(role==='host'&&hostGame&&checkStandardTimeout(hostGame)){
-      persistHost();sendState();setState(publicState(hostGame,myId));return
-    }
-    if(!state?.timer||state.status!=='playing')clearInterval(timerFrame)
+  stopClockRendering()
+  updateClocks()
+
+  if(!state?.timer||state.timer.mode==='off'||state.status!=='playing')return
+
+  // Visual clock changes share real second boundaries. The timers themselves
+  // remain millisecond-accurate; only their m:ss presentation is synchronized.
+  const schedule=()=>{
+    const delay=1000-Date.now()%1000+4
+    timerFrame=setTimeout(()=>{
+      updateClocks()
+      if(state?.timer&&state.timer.mode!=='off'&&state.status==='playing')schedule()
+      else timerFrame=0
+    },delay)
   }
-  tick()
-  if(state?.timer&&state.status==='playing')timerFrame=setInterval(tick,200)
+  schedule()
+
+  // Timeout enforcement stays responsive and independent of the 1 Hz display.
+  if(role==='host')hostTimerWatch=setInterval(()=>{
+    if(!hostGame||!state?.timer||state.status!=='playing')return
+    if(checkStandardTimeout(hostGame)){
+      stopClockRendering()
+      persistHost();sendState();setState(publicState(hostGame,myId))
+    }
+  },200)
 }
 
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&state?.timer&&state.status==='playing')startClockRendering()
+})
 els.players.onclick=e=>{if(e.target.closest('[data-rename]'))showRename()}
 els.resume.onclick=()=>{const recent=recentRoom();if(recent)join(recent.code)}
 els.statsBtn.onclick=showStats
