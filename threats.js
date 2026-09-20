@@ -10,7 +10,7 @@ export function sampleRack(pool, size, random=Math.random){
   return tiles.slice(0,size)
 }
 export function createThreats(){
-  return {samples:0,hits:Array(SIZE*SIZE).fill(0),scores:Array(SIZE*SIZE).fill(0),examples:Array(SIZE*SIZE).fill(null),any:0,bestTotal:0}
+  return {samples:0,hits:Array(SIZE*SIZE).fill(0),scores:Array(SIZE*SIZE).fill(0),topScores:Array(SIZE*SIZE).fill(0),topHits:Array(SIZE*SIZE).fill(0),examples:Array(SIZE*SIZE).fill(null),any:0,bestTotal:0}
 }
 export function addThreatSample(result, moves){
   const touched=new Map()
@@ -24,7 +24,16 @@ export function addThreatSample(result, moves){
     }
   }
   // Several qualifying words on the same rack count as ONE opportunity.
-  for(const [index,score] of touched){result.hits[index]++;result.scores[index]+=score}
+  for(const [index,score] of touched){
+    result.hits[index]++
+    result.scores[index]+=score
+    if(score>result.topScores[index]){
+      result.topScores[index]=score
+      result.topHits[index]=1
+    }else if(score===result.topScores[index]){
+      result.topHits[index]++
+    }
+  }
   result.bestTotal+=best
   if(touched.size)result.any++
   result.samples++
