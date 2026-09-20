@@ -41,11 +41,17 @@
             <div class="lobby-empty"><i>◇</i><span>No open games</span></div>
           </div>
 
-          <button class="primary create-game" id="createBtn">
-            <span class="plus">+</span>
-            <b>New game</b>
-            <span class="arrow">↗</span>
-          </button>
+          <div class="create-row">
+            <button class="primary create-game" id="createBtn">
+              <span class="plus">+</span>
+              <b>New game</b>
+              <span class="arrow">↗</span>
+            </button>
+            <button class="timer-preset" id="timerPresetBtn" title="Timer settings">
+              <span id="timerPresetMode">Standard</span>
+              <b id="timerPresetTime">25:00</b>
+            </button>
+          </div>
 
           <div class="join-row">
             <input id="roomInput" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="ROOM CODE" aria-label="Room code">
@@ -58,8 +64,11 @@
     <main class="game hidden" id="game">
       <header class="topbar">
         <button class="wordmark" id="homeBtn"><span class="mini-mark">OS</span><span>Openbook <b>Scrabble</b></span></button>
-        <div class="connection" id="connection"><i></i><span>Connecting</span></div>
-        <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
+        <div class="clock-strip" id="clockStrip"></div>
+        <div class="top-actions">
+          <div class="connection" id="connection" title="Connection"><i></i></div>
+          <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
+        </div>
       </header>
 
       <section class="game-shell">
