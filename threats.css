@@ -1,0 +1,31 @@
+.threat-panel{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:6px 0;margin-bottom:5px;color:#b5c5bb;font-size:10px}
+.heat-controls{display:flex;padding:3px;border:1px solid #ffffff13;border-radius:10px;background:#112219;gap:2px}
+.heat-controls button{border:0;background:none;color:#9caea2;padding:6px 10px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer}
+.heat-controls button[aria-pressed="true"]{background:#3e5546;color:#f4f3df;box-shadow:0 1px 4px #0003}
+.heat-controls button:focus-visible{outline:2px solid #f4d39a;outline-offset:1px}
+.heat-keys{display:flex;align-items:center;gap:12px;margin-left:auto;font-variant-numeric:tabular-nums}
+.heat-size-key,.heat-color-key{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.heat-size-key i{display:block;width:4px;height:4px;border-radius:50%;background:#d2ddce}.heat-size-key i:nth-child(2){width:7px;height:7px}.heat-size-key i:nth-child(3){width:11px;height:11px}
+.heat-color-key i{display:block;width:38px;height:6px;border-radius:8px;background:linear-gradient(90deg,#7ddb7d,#e4dc72,#e77878)}
+#threatStatus{min-width:12px;text-align:right;font-variant-numeric:tabular-nums;color:#9eafa3;font-size:10px}
+.threat-panel[aria-busy="true"] #threatStatus{color:#f4c58f}
+.cell .heat-hit{position:absolute;inset:0;display:grid;place-items:center;border:0;border-radius:3px;background:transparent;z-index:3;cursor:pointer;padding:0;min-width:0;min-height:0}
+.cell .heat-hit i{width:var(--diameter);height:var(--diameter);border-radius:50%;background:hsl(var(--hue) 75% 64%);border:1px solid #fff7;box-shadow:0 1px 4px #0009,0 0 0 1px #13251caf;pointer-events:none}
+.heat-controls button{display:flex;align-items:center;gap:4px}
+.heat-you-key,.heat-opp-key{display:inline-block;width:6px;height:12px;border:1px solid;border-radius:8px 0 0 8px;color:#8ce1ed}.heat-opp-key{border-radius:0 8px 8px 0;color:#ffa994}
+.cell [data-side="you"]{--side-color:#8ce1ed}.cell [data-side="opponent"]{--side-color:#ffa994}
+.cell .heat-hit i{border:2px solid var(--side-color)}
+.heat-both .cell .heat-hit[data-side="you"]{right:50%;justify-items:end}
+.heat-both .cell .heat-hit[data-side="opponent"]{left:50%;justify-items:start}
+.heat-both .cell .heat-hit[data-side="you"] i{border-radius:100% 0 0 100% / 50% 0 0 50%;transform:translateX(-1px)}
+.heat-both .cell .heat-hit[data-side="opponent"] i{border-radius:0 100% 100% 0 / 0 50% 50% 0;transform:translateX(1px)}
+.heat-tooltip[data-side="you"]{border-color:#8ce1ed99}.heat-tooltip[data-side="opponent"]{border-color:#ffa99499}
+.cell .heat-hit:focus-visible{outline:2px solid white;outline-offset:1px;z-index:6}
+.cell .heat-hit:hover i{filter:brightness(1.15)}
+.cell .opponent-ghost{position:absolute;inset:1px;display:grid;place-items:center;border:1px dashed var(--side-color,#ffe4be);border-radius:4px;background:#223e35f2;color:#fff5d9;font-weight:800;font-size:clamp(11px,3cqw,25px);z-index:4;pointer-events:none;box-shadow:0 1px 4px #0008}
+.heat-tooltip{position:fixed;z-index:1000;pointer-events:none;width:260px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:13px 15px;border:1px solid #72857780;border-radius:14px;background:#15271ff7;color:#f4f1df;box-shadow:0 12px 40px #0007;font-family:inherit;backdrop-filter:blur(12px)}
+.heat-tooltip[hidden]{display:none}
+.heat-tooltip header{display:flex;flex-direction:column;gap:3px;font-size:12px}.heat-tooltip header b{display:flex;justify-content:space-between}.heat-tooltip header b span{color:#bccdbc}.heat-tooltip header small{color:#9fb2a5;font-size:10px}
+.heat-metrics{display:grid;grid-template-columns:1fr 1.5fr;gap:14px;padding:12px 0}.heat-metrics>div{display:flex;flex-direction:column;gap:3px}.heat-metrics strong{font-size:25px;line-height:1.1;font-variant-numeric:tabular-nums}.heat-metrics strong small{font-size:12px;font-weight:500}.heat-metrics span{color:#b6c6bb;font-size:10px}
+.heat-tooltip footer{display:flex;justify-content:space-between;gap:8px;border-top:1px solid #ffffff1c;padding-top:9px;font-size:11px}.heat-tooltip footer span{color:#aabcaf}.heat-tooltip footer b{color:#f4f1df;margin-left:4px;overflow-wrap:anywhere}.heat-sample{display:block;color:#93a99b;font-size:9px;margin-top:7px}
+@media(max-width:420px){.heat-controls button{padding:6px 8px}.heat-keys{gap:8px}.heat-color-key i{width:25px}.threat-panel{gap:6px}}

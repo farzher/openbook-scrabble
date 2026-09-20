@@ -2,6 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
+import {initThreats,updateThreats} from './threat-ui.js'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -153,6 +154,7 @@ async function loadLexicon(quiet=false){
     const words=text.split(/\r?\n/)
     lex=new Lexicon(words)
     startMoveWorker(words)
+    initThreats(words)
     return lex
   })().catch(e=>{lexPromise=null;throw e})
   try{
@@ -577,6 +579,7 @@ function chooseMove(m){
   renderBoard();renderMoves();renderRack(state.players.find(p=>p.id===myId)?.rack||[]);updatePreview()
 }
 function updatePreview(){
+  updateThreats(state,selected,myId)
   const mine=state?.status==='playing'&&state.players[state.turn]?.id===myId
   $('#previewBar').classList.toggle('has-preview',!!selected)
   $('#previewText').innerHTML=selected?`<b>${selected.word}</b><span>${coord(selected)} · ${selected.placements.length} tiles</span><strong>+${selected.score} <small>pts</small></strong>`:mine?'Select a word to preview it on the board':state?.status==='finished'?'Game complete — nicely played.':'Your next move is worth the wait.'
@@ -675,7 +678,7 @@ function showRename(){
   input.onkeydown=e=>{if(e.key==='Enter')save()}
 }
 function showRules(){
-  openModal(`<h2>Openbook Scrabble</h2><p>Standard Scrabble, except every legal play in your rack is shown.</p><ul class="rules-list"><li>Standard board, tiles, premiums and 50-point bingo.</li><li>The first word crosses the center.</li><li>Swap only while 7+ tiles remain.</li><li>Six scoreless turns ends the game.</li><li>All publicly trackable tile statistics are shown; hidden racks stay hidden.</li><li>Scores are shown; strategic advice is not.</li><li>Wordbook: ENABLE.</li></ul><div class="modal-actions"><button class="primary" data-close>Done</button></div>`)
+  openModal(`<h2>Openbook Scrabble</h2><p>Standard Scrabble, except every legal play in your rack is shown.</p><ul class="rules-list"><li>Standard board, tiles, premiums and 50-point bingo.</li><li>The first word crosses the center.</li><li>Swap only while 7+ tiles remain.</li><li>Six scoreless turns ends the game.</li><li>All publicly trackable tile statistics are shown; hidden racks stay hidden.</li><li>The opponent heatmap estimates opportunities from unseen tiles, not their actual rack or their choice of move.</li><li>Wordbook: ENABLE.</li></ul><div class="modal-actions"><button class="primary" data-close>Done</button></div>`)
 }
 function showFinished(){
   openModal(`<h2>${escapeHtml(finishText())}</h2><div class="modal-actions"><button class="ghost" data-close>Board</button><button class="primary" id="newGame">Home</button></div>`)

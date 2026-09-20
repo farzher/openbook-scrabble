@@ -31,6 +31,16 @@ Timer state belongs to the host-authoritative game state and is included in reco
 
 The game exposes information a perfect human tile-counter could derive from public play without revealing hidden rack contents. The tracker shows every **unseen tile** (bag + opponent rack), including exact remaining counts per letter and blanks, plus bag size and opponent rack size.
 
+### Opponent heatmap
+
+The compact heatmap defaults to **Both**, with **You**, **Opponent**, and **Off** views also available. It refreshes automatically after you preview a placement. In Both mode, each square has split markers: your cyan-outlined half on the left and the opponent's coral-outlined half on the right. Each half independently represents availability probability by size and average best score through that square **when a play there is available** by fill color, on a fixed green-to-red 0–100+ point scale. Hover or tap either half to inspect that player's opportunities. These are separate marginal estimates, not the probability that both players can use a square together. Hover, keyboard-focus, or tap a circle for an instant custom card with separate chance and score metrics and a ghost example. Tap again, tap outside, or press Escape to dismiss. No score cutoff or recommended move is used.
+
+**You** shows exact current-rack opportunities without a preview. With a preview it preserves your unplayed tiles and samples refills up to the remaining bag count. This is follow-up potential on the preview board, not a prediction of the opponent's intervening move; the card labels this limitation.
+
+A separate worker samples 96 possible opponent racks without replacement from public unseen tiles. The same rack samples are reused across previews for stable comparisons. Results refine progressively; changing previews cancels old work. These are rough random-rack estimates, not predictions of what the opponent will choose; they ignore rack inference from prior decisions. Overlapping square probabilities must not be added. Unmarked squares are not guaranteed safe. When all unseen tiles belong to the opponent, the rack is publicly inferable and only one exact evaluation is needed. Hidden host state is never used. Worker support is required for the heatmap.
+
+Run the sampling checks with `node threats.test.mjs`.
+
 The game also surfaces public strategic context such as score differential, turn count, best scoring play, bingo count, scoreless-turn pressure, move history, clocks, and connection transport. It intentionally does not expose the opponent's actual rack or exact bag composition.
 
 ## Interface
