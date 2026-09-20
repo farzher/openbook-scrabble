@@ -1,10 +1,12 @@
-.threat-panel{
+:root{
   --forecast-you:#8ad9c9;
   --forecast-you-fill:#4a9f91d9;
   --forecast-you-glow:#8ad9c966;
   --forecast-opp:#f2a087;
   --forecast-opp-fill:#b96c58dc;
   --forecast-opp-glow:#f2a08766;
+}
+.threat-panel{
   display:grid;
   gap:8px;
   margin:2px 0 10px;
