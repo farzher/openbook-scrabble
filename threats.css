@@ -1,23 +1,33 @@
-/* Continuous EV field: no markers, wedges, or tile-sized color blocks. */
-.board.heat-cloud{background-color:#101927;background-size:100% 100%;background-origin:content-box;background-clip:padding-box;background-repeat:no-repeat;border-color:#2c3d46;box-shadow:0 16px 45px #0005,0 0 32px #5298ae0b,inset 0 1px 0 #ffffff13}
-.board.heat-cloud .cell{background:#10192712;box-shadow:inset 0 0 0 1px #bddbe314;border-radius:3px}
+/* Continuous EV field. The previous field stays painted while a new position is calculated. */
+.board.heat-cloud{background-color:#08131b;background-size:100% 100%;background-origin:content-box;background-clip:padding-box;background-repeat:no-repeat;border-color:#2c3d46;box-shadow:0 16px 45px #0005,0 0 36px #6fb8cf10,inset 0 1px 0 #ffffff13}
+.board.heat-cloud.heat-loading{background-color:#071017;box-shadow:0 16px 45px #0006,0 0 32px #0004,inset 0 1px 0 #ffffff0d}
+.board.heat-cloud .cell{background:#08131b10;box-shadow:inset 0 0 0 1px #bddbe314;border-radius:3px}
 .board.heat-cloud .cell:after{position:relative;z-index:1;pointer-events:none;color:#c1d5dfaa;font-size:clamp(6px,1.2cqw,10px);text-shadow:0 1px 4px #00101d}
 .board.heat-cloud .cell.tw:after{color:#ffbca7}.board.heat-cloud .cell.dw:after{color:#e5bdd9}.board.heat-cloud .cell.tl:after{color:#a9cffc}.board.heat-cloud .cell.dl:after{color:#a9e0df}.board.heat-cloud .cell.center:after{font-size:clamp(12px,2.5cqw,21px)}
 .board.heat-cloud .cell:has(.tile):after{visibility:hidden}
 .cell.forecast-focus{outline:1px solid #edfaf3b0;outline-offset:0;z-index:4;box-shadow:inset 0 0 12px #d1f6ec18!important}
 .cell[role=button]{cursor:pointer}.cell[role=button]:focus-visible{outline:2px solid #fff;outline-offset:1px;z-index:5}
 
-.threat-panel{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;position:relative;padding:10px 14px;margin:4px 0 8px;border:1px solid #a5bac515;border-radius:14px;background:#142024;color:#dce5de;box-shadow:inset 0 1px 0 #ffffff04}
-.forecast-label{display:flex;flex-direction:column;gap:3px}.forecast-label>span{font-size:11px;font-weight:800;letter-spacing:.01em}.forecast-label>b{font-size:9px;color:#98aaa2;font-weight:500}
-.heat-views{display:flex;gap:2px;padding:3px;border:1px solid #ffffff08;border-radius:9px;background:#080f1555}.heat-views button{padding:5px 10px;border:0;border-radius:6px;background:transparent;color:#8faaa9;font:700 10px 'Manrope';cursor:pointer}.heat-views button[aria-pressed=true]{background:#334a50;color:#ecf5ee;box-shadow:0 1px 4px #0003,inset 0 1px 0 #ffffff12}.heat-views button:hover{color:#fff}.heat-views button:focus-visible{outline:2px solid #99dcd5;outline-offset:2px}
-.forecast-legend{display:flex;align-items:center;margin-left:auto;gap:12px}.dual-legend>span{display:flex;align-items:center;gap:5px;font-size:10px;color:#b6c6d1;white-space:nowrap}.dual-legend i{width:10px;height:10px;border-radius:50%;background:var(--legend-color);box-shadow:0 0 9px color-mix(in srgb,var(--legend-color) 40%,transparent)}.legend-you{--legend-color:#64a9ff}.legend-opponent{--legend-color:#f5807c}.legend-both{--legend-color:#cea2f6}.dual-legend>small{font-size:9px;color:#92a5b2;white-space:nowrap}
-#threatStatus{margin-left:auto;font-size:9px;color:#a6b8ad}#threatStatus[data-state=busy]{color:#e7c093}#threatStatus[data-state=error]{color:#efab98}
-/* Reserved inspector row: never floats over the board. */
-.threat-panel:after{content:'Hover for exact EV · Click to preview · Click again for alternatives';display:block;width:100%;height:32px;padding-top:8px;border-top:1px solid #ffffff0c;font-size:10px;color:#9aafb0}
-.heat-tooltip{position:absolute;bottom:7px;left:14px;right:14px;height:37px;display:flex;align-items:center;gap:14px;background:#142024;color:#edf4ee;pointer-events:none;z-index:2;border-top:1px solid #ffffff0c;padding-top:6px}
-.heat-tooltip[hidden]{display:none}.heat-tip-head{display:flex;flex-direction:column;gap:3px}.heat-tip-head>b{font-size:11px;color:#dce9e5}.heat-tip-head>small{font-size:9px;color:#a2b5b4}.heat-side-shape{display:none}
+/* One quiet control strip: board-level EV is primary, heatmap is optional. */
+.threat-panel{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;position:relative;padding:8px 11px;margin:4px 0 8px;border:1px solid #a5bac512;border-radius:13px;background:#111c20b8;color:#dce5de;box-shadow:inset 0 1px 0 #ffffff04}
+.board-ev-title{display:flex;align-items:baseline;gap:7px;white-space:nowrap}.board-ev-title>span{font:800 11px 'Manrope';color:#dfe9e3}.board-ev-title>small{font-size:8px;color:#7f928c;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.board-ev-values{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0}.board-ev-values>i{font-style:normal;font-size:8px;color:#62727a;text-transform:uppercase}
+.board-ev-player{display:grid;grid-template-columns:auto auto;align-items:baseline;gap:6px;min-width:0}.board-ev-player span{font-size:9px;color:#91a3aa;white-space:nowrap;max-width:95px;overflow:hidden;text-overflow:ellipsis}.board-ev-player strong{font:800 21px/1 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.board-ev-player.you strong{color:#7fc8ff}.board-ev-player.opponent strong{color:#ff9b8d}
+.threat-panel.ev-stale .board-ev-values{opacity:.48}
+.heatmap-actions{display:flex;align-items:center;gap:7px;justify-self:end}
+.heat-toggle{height:29px;display:flex;align-items:center;gap:7px;padding:0 8px;border:1px solid #ffffff10;border-radius:8px;background:#ffffff035;color:#91a3aa;font-size:9px;font-weight:700}.heat-toggle:hover{background:#ffffff07;color:#d7e2dc}.heat-toggle>i{width:24px;height:14px;border-radius:999px;background:#27373d;box-shadow:inset 0 0 0 1px #ffffff0c;position:relative}.heat-toggle>i:after{content:"";position:absolute;width:10px;height:10px;left:2px;top:2px;border-radius:50%;background:#71828a;transition:.16s transform,.16s background}.heat-toggle[aria-pressed=true]>i{background:#315462}.heat-toggle[aria-pressed=true]>i:after{transform:translateX(10px);background:#9cd9f4}
+#threatStatus{display:none;width:10px;height:10px;flex:none}
+#threatStatus[data-state=busy]{display:block;border:2px solid #ffffff18;border-top-color:#d8c096;border-radius:50%;animation:ev-spin .75s linear infinite}
+#threatStatus[data-state=error]{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#7d3c35;color:#ffd1c7;font-size:10px;font-weight:800}
+@keyframes ev-spin{to{transform:rotate(360deg)}}
+
+/* Inspector stays inside the EV strip rather than floating over the board. */
+.heat-tooltip{position:absolute;bottom:7px;left:14px;right:14px;height:37px;display:flex;align-items:center;gap:14px;background:#111c20;color:#edf4ee;pointer-events:none;z-index:3;border-top:1px solid #ffffff0c;padding-top:6px}
+.heat-tooltip[hidden]{display:none}.heat-tip-head{display:flex;flex-direction:column;gap:3px}.heat-tip-head>b{font-size:11px;color:#dce9e5}.heat-tip-head>small{font-size:9px;color:#a2b5b4}
 .dual-ev{flex:1;display:grid;grid-template-columns:1fr auto;gap:0 10px;padding-left:14px;border-left:1px solid #ffffff0c;min-width:0;color:#83baff}.dual-ev[data-side=opponent]{color:#ff9a94}.dual-ev>span{font-size:10px;font-weight:800;white-space:nowrap}.dual-ev small{font-size:8px;font-weight:500;color:#93a7b4}.dual-ev>span small{margin-left:4px}.dual-ev>strong{grid-column:2;grid-row:1 / 3;align-self:center;font:800 23px/1 'Manrope';font-variant-numeric:tabular-nums}.dual-phase{grid-column:1}
-@media(max-width:560px){.forecast-label>b{display:none}.threat-panel{gap:7px;padding-inline:10px}.forecast-legend{order:4;width:100%;justify-content:center}.dual-legend{gap:10px}.dual-legend>small{font-size:8px}.dual-ev{padding-left:8px;gap:0 4px}.dual-ev>span small{display:none}.dual-ev>strong{font-size:21px}.heat-views button{padding:5px 8px}.heat-tooltip{gap:10px}.heat-tooltip footer{display:none}.heat-tip-head>small{font-size:8px}.threat-panel:after{order:5;font-size:9px}#threatStatus{font-size:8px}}
+
+@media(max-width:560px){.threat-panel{grid-template-columns:auto 1fr;gap:7px 10px;padding-inline:9px}.board-ev-title{grid-column:1}.board-ev-values{grid-column:2;justify-content:flex-end;gap:7px}.board-ev-player span{display:none}.board-ev-player strong{font-size:19px}.heatmap-actions{grid-column:1/-1;justify-self:end}.heat-toggle span{display:none}.heat-tooltip{gap:9px}.dual-ev{padding-left:8px;gap:0 4px}.dual-ev>span small{display:none}.dual-ev>strong{font-size:20px}}
 
 /* Rail: secondary data is opt-in, history owns the remaining space. */
 .left-rail .tracker-card summary{cursor:pointer;font-size:12px;font-weight:700;color:#acbeb3}.tracker-card summary strong{float:right}.tracker-card[open] summary{margin-bottom:14px}
