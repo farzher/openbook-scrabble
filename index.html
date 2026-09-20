@@ -8,7 +8,7 @@
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./polish.css">
-  <link rel="stylesheet" href="./threats.css?v=ev-ui2">
+  <link rel="stylesheet" href="./threats.css?v=ev-ui3">
 </head>
 <body>
 <div id="app">
@@ -96,10 +96,10 @@
           <div class="board-ev-title" title="Expected score of the best available move across possible racks">
             <span>Board EV</span><small id="threatPhase"></small>
           </div>
-          <div class="board-ev-values">
-            <div class="board-ev-player you"><span>You</span><strong id="boardEvYou">—</strong></div>
+          <div class="board-ev-values" aria-label="Blue player EV versus red player EV">
+            <strong class="you" id="boardEvYou">—</strong>
             <i>vs</i>
-            <div class="board-ev-player opponent"><span id="boardEvOpponentLabel">Opponent</span><strong id="boardEvOpponent">—</strong></div>
+            <strong class="opponent" id="boardEvOpponent">—</strong>
           </div>
           <div class="heatmap-actions">
             <button type="button" id="heatToggle" class="heat-toggle" aria-pressed="true" title="Hide EV heatmap" aria-label="Toggle EV heatmap"><span>Heatmap</span><i></i></button>
@@ -141,6 +141,6 @@
   <div class="modal-layer hidden" id="modalLayer"><div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game dialog" tabindex="-1"></div></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
-<script type="module" src="./app.js?v=ev-ui2"></script>
+<script type="module" src="./app.js?v=ev-ui3"></script>
 </body>
 </html>
