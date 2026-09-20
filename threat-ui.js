@@ -6,116 +6,127 @@ const panel=document.querySelector('#threatPanel')
 const status=document.querySelector('#threatStatus')
 const phase=document.querySelector('#threatPhase')
 const board=document.querySelector('#board')
+const evYou=document.querySelector('#boardEvYou')
+const evOpponent=document.querySelector('#boardEvOpponent')
+const evOpponentLabel=document.querySelector('#boardEvOpponentLabel')
+const toggle=document.querySelector('#heatToggle')
 
 const tip=document.createElement('div')
 tip.id='heatTooltip'
 tip.className='heat-tooltip'
 tip.hidden=true
 tip.setAttribute('role','tooltip')
-panel.append(tip)
+panel?.append(tip)
 
-let worker=null,request=0,key='',timer=null,context=null,results={},active=null
+let worker=null,request=0,key='',resultsKey='',timer=null,context=null,results={},pending={},active=null
+let enabled=true,painted=null,cacheTurn='',cache=new Map()
 const SIDES=['you','opponent']
-let enabled=true,painted=null
+const CACHE_LIMIT=96
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
-const toggle=panel.querySelector('#heatToggle')
-toggle.addEventListener('click',()=>{
-  enabled=!enabled
-  toggle.setAttribute('aria-pressed',String(enabled))
-  toggle.textContent=enabled?'Heatmap on':'Heatmap off'
-  hideTip();paint()
-})
+
 const coord=i=>`${String.fromCharCode(65+i%SIZE)}${Math.floor(i/SIZE)+1}`
 const evAt=(result,index)=>result?.samples?(result.scores?.[index]||0)/result.samples:0
-// EV = average best score placing a tile here, including zero for racks
-// without a legal play here. It is not win probability or multi-turn equity.
-// Independent blue/red channels on the same fixed EV scale.
+const boardEv=result=>result?.samples?(result.bestTotal||0)/result.samples:null
 const sidePhase=side=>{
   if(side==='you')return context?.preview?'After refill':'Current rack'
   return context?.preview?'Reply to preview':'Possible rack'
 }
+const ready=data=>!!(data?.result?.samples||data?.error)
+const complete=data=>!!(data?.done||data?.error)
 
-function unavailable(message='Unavailable'){
-  status.textContent=message
-  status.dataset.state='error'
-  panel.removeAttribute('aria-busy')
+toggle?.addEventListener('click',()=>{
+  enabled=!enabled
+  toggle.setAttribute('aria-pressed',String(enabled))
+  toggle.title=enabled?'Hide EV heatmap':'Show EV heatmap'
+  hideTip()
+  if(enabled){
+    ensureHeatShell()
+    paint()
+  }else{
+    hideHeatmap()
+  }
+})
+
+function setStatus(state,label=''){
+  if(!status)return
+  status.dataset.state=state
+  status.textContent=state==='error'?'!':''
+  status.title=label
+  status.setAttribute('aria-label',label)
+  panel?.toggleAttribute('aria-busy',state==='busy')
 }
-
+function unavailable(message='EV unavailable'){
+  setStatus('error',message)
+  board?.classList.remove('heat-loading')
+}
 export function initThreats(words){
-  if(!panel||!status||!phase||!board)return
+  if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev4',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-cache1',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       if(data.id!==request)return
-      results[data.side]=data
+      pending[data.side]=data
+
+      // Do not replace the previous map with a half-new one. Once both sides
+      // have data, promote them together and refine from there.
+      if(SIDES.every(side=>ready(pending[side]))){
+        results={...pending}
+        resultsKey=key
+        paint()
+        renderBoardEv()
+      }
       updateStatus()
-      paint()
+
+      if(SIDES.every(side=>complete(pending[side]))){
+        remember(key,resultsKey===key?results:{...pending})
+        board.classList.remove('heat-loading')
+      }
     }
     worker.onerror=event=>{
-      console.error('Future-value worker failed',event)
+      console.error('EV worker failed',event)
       worker?.terminate();worker=null
       unavailable()
     }
     worker.postMessage({type:'init',words})
   }catch(error){
-    console.error('Future-value worker unavailable',error)
+    console.error('EV worker unavailable',error)
     unavailable()
   }
 }
 
+function remember(cacheKey,value){
+  if(!cacheKey||!SIDES.every(side=>value?.[side]))return
+  if(cache.has(cacheKey))cache.delete(cacheKey)
+  cache.set(cacheKey,value)
+  while(cache.size>CACHE_LIMIT)cache.delete(cache.keys().next().value)
+}
+function resetTurnCache(turnKey){
+  if(cacheTurn===turnKey)return
+  cacheTurn=turnKey
+  cache.clear()
+}
 function updateStatus(){
-  if(!panel||!status)return
-  const busy=SIDES.some(side=>!results[side]?.done&&!results[side]?.error)
-  const failed=SIDES.some(side=>results[side]?.error)
-  const exact=SIDES.every(side=>results[side]?.exact)
-  const hasData=SIDES.some(side=>results[side]?.result?.samples)
-  status.textContent=failed?'Partial':busy?(hasData?'Refining…':'Sampling…'):exact?'Exact':'Estimated'
-  status.dataset.state=failed?'error':busy?'busy':exact?'exact':'estimate'
-  panel.setAttribute('aria-busy',String(busy))
+  const failed=SIDES.some(side=>pending[side]?.error)
+  const busy=!SIDES.every(side=>complete(pending[side]))
+  if(failed)setStatus('error','Some EV data is unavailable')
+  else if(busy)setStatus('busy',resultsKey===key?'Refining EV':'Calculating EV')
+  else setStatus('ready','')
 }
-
-function hideTip(){
-  active=null
-  tip.hidden=true
-  board.querySelectorAll('.opponent-ghost').forEach(el=>el.remove())
-  board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
-  board.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
+function ensureHeatShell(){
+  if(!enabled||!board)return
+  board.classList.add('heat-cloud')
+  if(resultsKey!==key)board.classList.add('heat-loading')
 }
-function showTip(index){
-  if(!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
-  active={index}
-  tip.innerHTML=`<div class="heat-tip-head"><b>${coord(index)}</b><small>Expected pts</small></div>`+SIDES.map(side=>{
-    const data=results[side],result=data?.result
-    const ready=!!result?.samples
-    const note=ready?(data.exact?'exact':`${result.samples} racks`):(data?.error?'unavailable':'sampling…')
-    return `<div class="dual-ev" data-side="${side}">
-      <span>${side==='you'?'You':'Opponent'} <small>${note}</small></span>
-      <strong>${ready?evAt(result,index).toFixed(1):'—'}</strong>
-      <small class="dual-phase">${sidePhase(side)}</small>
-    </div>`
-  }).join('')
-
-  tip.hidden=false
-  board.querySelectorAll('.opponent-ghost').forEach(el=>el.remove())
-  board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
-  board.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
-
-  const cell=board.children[index]
-  cell?.classList.add('forecast-focus')
-  cell?.setAttribute('aria-describedby',tip.id)
-
-  // Keep forecast examples off the board: they are not necessarily playable
-  // with your rack, and must never obscure the actual move preview.
-}
-
-function clearPaint(){
-  hideTip()
-  painted=null
-  board.classList.remove('heat-cloud')
+function hideHeatmap(){
+  board.classList.remove('heat-cloud','heat-loading')
   board.style.removeProperty('background-image')
+  painted=null
+  restoreTitles()
+}
+function restoreTitles(){
   for(const cell of board.children){
     if(cell.dataset.heatTitle!==undefined){
       cell.title=cell.dataset.heatTitle
@@ -123,12 +134,47 @@ function clearPaint(){
     }
   }
 }
-
+function hideTip(){
+  active=null
+  if(tip)tip.hidden=true
+  board?.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
+  board?.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
+}
+function showTip(index){
+  if(resultsKey!==key||!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
+  active={index}
+  tip.innerHTML=`<div class="heat-tip-head"><b>${coord(index)}</b><small>Expected pts</small></div>`+SIDES.map(side=>{
+    const data=results[side],result=data?.result
+    const readyNow=!!result?.samples
+    const note=readyNow?(data.exact?'exact':`${result.samples} racks`):(data?.error?'unavailable':'—')
+    return `<div class="dual-ev" data-side="${side}">
+      <span>${side==='you'?'You':'Opponent'} <small>${note}</small></span>
+      <strong>${readyNow?evAt(result,index).toFixed(1):'—'}</strong>
+      <small class="dual-phase">${sidePhase(side)}</small>
+    </div>`
+  }).join('')
+  tip.hidden=false
+  board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
+  board.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
+  const cell=board.children[index]
+  cell?.classList.add('forecast-focus')
+  cell?.setAttribute('aria-describedby',tip.id)
+}
+function renderBoardEv(){
+  if(!evYou||!evOpponent)return
+  const you=boardEv(results.you?.result),opp=boardEv(results.opponent?.result)
+  evYou.textContent=you===null?'—':you.toFixed(1)
+  evOpponent.textContent=opp===null?'—':opp.toFixed(1)
+  const opponent=context?.state?.players.find(p=>p.id!==context.myId)
+  if(evOpponentLabel)evOpponentLabel.textContent=opponent?.name||'Opponent'
+  panel.classList.toggle('ev-stale',resultsKey!==key)
+}
 function paint(){
-  if(!board)return
+  if(!board||!enabled)return
+  ensureHeatShell()
   const pair=SIDES.map(side=>results[side]?.result)
-  if(!enabled||!pair.some(result=>result?.samples)||!brush){clearPaint();return}
-  board.classList.add('heat-cloud')
+  if(resultsKey!==key||!pair.some(result=>result?.samples)||!brush)return
+
   if(!painted||pair.some((result,i)=>result!==painted[i])){
     const values=pair.map(result=>result?.samples?result.scores.map(score=>score/result.samples):Array(SIZE*SIZE).fill(0))
     const image=brush.createImageData(240,240)
@@ -137,25 +183,45 @@ function paint(){
     board.style.backgroundImage=`url("${canvas.toDataURL()}")`
     painted=pair
   }
+  board.classList.remove('heat-loading')
   for(const cell of board.children){
     if(cell.hasAttribute('title')){cell.dataset.heatTitle=cell.title;cell.removeAttribute('title')}
   }
   if(active!==null)showTip(active.index)
 }
+function analysisKey(state,selected,myId){
+  if(!state||state.status!=='playing')return''
+  const preview=selected?.placements
+    ?.map(p=>`${p.r},${p.c},${p.letter},${p.blank?1:0}`)
+    .sort()
+    .join(';')||'base'
+  return `${myId}|${state.revision}|${preview}`
+}
 
 export function updateThreats(state,selected,myId){
-  if(!panel||!status||!phase||!board)return
+  if(!panel||!status||!board)return
   context=state?{state,preview:selected,myId}:null
   panel.classList.toggle('hidden',!state||state.status!=='playing')
-  phase.textContent=selected?'After preview':'Current board'
+  if(phase)phase.textContent=selected?'after preview':''
 
-  const mine=state?.players.find(p=>p.id===myId)
-  const next=state&&state.status==='playing'
-    ?JSON.stringify([myId,state.revision,state.board,mine?.rack,selected?.placements])
-    :''
+  if(!state||state.status!=='playing'){
+    key=''
+    resultsKey=''
+    results={}
+    pending={}
+    hideTip()
+    hideHeatmap()
+    renderBoardEv()
+    setStatus('ready','')
+    return
+  }
+
+  resetTurnCache(`${myId}|${state.revision}`)
+  const next=analysisKey(state,selected,myId)
   if(next===key){
+    ensureHeatShell()
     paint()
-    updateStatus()
+    renderBoardEv()
     return
   }
 
@@ -163,29 +229,37 @@ export function updateThreats(state,selected,myId){
   request++
   clearTimeout(timer)
   worker?.postMessage({type:'cancel'})
-  results={}
-  clearPaint()
-  panel.removeAttribute('aria-busy')
+  pending={}
+  hideTip()
 
-  if(!next){
-    status.textContent=''
+  // Keep the previously-rendered cloud while the new position is calculated.
+  // On the first analysis, enter the dark heatmap shell immediately.
+  ensureHeatShell()
+  panel.classList.add('ev-stale')
+  setStatus('busy','Calculating EV')
+
+  const cached=cache.get(key)
+  if(cached){
+    results=cached
+    resultsKey=key
+    pending={...cached}
+    painted=null
+    paint()
+    renderBoardEv()
+    panel.classList.remove('ev-stale')
+    setStatus('ready','')
     return
   }
+
+  const mine=state.players.find(p=>p.id===myId)
   if(selected&&state.bagCount===0&&selected.placements.length===mine?.rack.length){
-    status.textContent='Game ending'
-    status.dataset.state='exact'
+    setStatus('ready','Game ending')
     return
   }
 
-  status.textContent='Sampling…'
-  status.dataset.state='busy'
-  panel.setAttribute('aria-busy','true')
-
-  // Use the pre-preview board AND full rack: played tiles must not become
-  // available to either the opponent or our hypothetical refill.
+  // Played tiles remain unavailable to both hypothetical racks.
   const pool=unseenPool(state.board,mine?.rack||[])
   const id=request
-
   timer=setTimeout(()=>{
     if(!worker){unavailable();return}
     for(const side of SIDES){
@@ -204,21 +278,21 @@ export function updateThreats(state,selected,myId){
         kept
       })
     }
-  },100)
+  },70)
 }
 
-board.addEventListener('pointermove',e=>{
+board?.addEventListener('pointermove',e=>{
   const cell=e.target.closest('.cell')
   if(!cell)return
   const index=Number(cell.dataset.r)*SIZE+Number(cell.dataset.c)
   if(enabled)showTip(index)
   else hideTip()
 })
-board.addEventListener('pointerleave',hideTip)
-board.addEventListener('focusin',e=>{
+board?.addEventListener('pointerleave',hideTip)
+board?.addEventListener('focusin',e=>{
   const cell=e.target.closest('.cell')
   if(cell&&enabled)showTip(Number(cell.dataset.r)*SIZE+Number(cell.dataset.c))
 })
-board.addEventListener('focusout',hideTip)
+board?.addEventListener('focusout',hideTip)
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#board'))hideTip()})
 document.addEventListener('keydown',e=>{if(e.key==='Escape')hideTip()})
