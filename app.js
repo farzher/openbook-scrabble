@@ -1,5 +1,5 @@
 import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
-import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
+import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
 import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-progressive2'
@@ -20,7 +20,7 @@ const els={
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
 let moves=[],moveByKey=new Map(),moveEv=new Map(),moveRows=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
-let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting',directPingMs=null
+let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,animatedRevision=-1,lastTransport='Connecting',directPingMs=null
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
 let timerPrefs=loadTimerPrefs()
@@ -423,7 +423,6 @@ function render(){
 }
 function finishText(){
   const end=state.history?.[state.history.length-1]
-  if(end?.type==='end'&&end.reason==='time')return`${state.players[1-end.loser]?.name||'Opponent'} wins on time`
   const a=state.players[0],b=state.players[1]
   if(a.score===b.score)return`Tie · ${a.score}`
   const w=a.score>b.score?a:b
@@ -852,9 +851,7 @@ function updateClocks(){
 }
 function stopClockRendering(){
   clearTimeout(timerFrame)
-  clearInterval(hostTimerWatch)
   timerFrame=0
-  hostTimerWatch=null
 }
 function startClockRendering(){
   stopClockRendering()
@@ -874,14 +871,6 @@ function startClockRendering(){
   }
   schedule()
 
-  // Timeout enforcement stays responsive and independent of the 1 Hz display.
-  if(role==='host')hostTimerWatch=setInterval(()=>{
-    if(!hostGame||!state?.timer||state.status!=='playing')return
-    if(checkStandardTimeout(hostGame)){
-      stopClockRendering()
-      persistHost();sendState();setState(publicState(hostGame,myId))
-    }
-  },200)
 }
 
 document.addEventListener('visibilitychange',()=>{
