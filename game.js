@@ -94,7 +94,10 @@ export function evaluatePlacements(board, placements, lex){
   if(placements.length===1){
     const p=placements[0]
     const h=!!at(board,p.r,p.c-1)||!!at(board,p.r,p.c+1), v=!!at(board,p.r-1,p.c)||!!at(board,p.r+1,p.c)
-    if(v&&!h){dr=1;dc=0}
+    // A single tile is trivially in both a row and column. Prefer horizontal
+    // when it forms a word, and score the vertical word as its cross.
+    if(h){dr=0;dc=1}
+    else if(v){dr=1;dc=0}
   }
   let min=Infinity,max=-Infinity
   for(const p of placements){ const q=dr?p.r:p.c; min=Math.min(min,q);max=Math.max(max,q) }

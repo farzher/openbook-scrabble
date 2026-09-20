@@ -1,4 +1,6 @@
-import {DISTRIBUTION,SIZE,applyMove,removeRackTiles} from './game.js'
+import {SIZE,applyMove,removeRackTiles} from './game.js'
+import {unseenPool} from './threats.js'
+import {dualCloudPixels} from './heatmap.js'
 
 const panel=document.querySelector('#threatPanel')
 const status=document.querySelector('#threatStatus')
@@ -10,28 +12,29 @@ tip.id='heatTooltip'
 tip.className='heat-tooltip'
 tip.hidden=true
 tip.setAttribute('role','tooltip')
-document.body.append(tip)
+panel.append(tip)
 
-let worker=null,request=0,key='',timer=null,context=null,results={},active=null,pinned=false
+let worker=null,request=0,key='',timer=null,context=null,results={},active=null
 const SIDES=['you','opponent']
+let enabled=true,painted=null
+const canvas=document.createElement('canvas')
+canvas.width=canvas.height=240
+const brush=canvas.getContext('2d')
+const toggle=panel.querySelector('#heatToggle')
+toggle.addEventListener('click',()=>{
+  enabled=!enabled
+  toggle.setAttribute('aria-pressed',String(enabled))
+  toggle.textContent=enabled?'Heatmap on':'Heatmap off'
+  hideTip();paint()
+})
 const coord=i=>`${String.fromCharCode(65+i%SIZE)}${Math.floor(i/SIZE)+1}`
 const evAt=(result,index)=>result?.samples?(result.scores?.[index]||0)/result.samples:0
-const playChance=(result,index)=>result?.samples?(result.hits?.[index]||0)/result.samples:0
-const bestScore=(result,index)=>result?.topScores?.[index]||result?.examples?.[index]?.score||0
-
-// EV is intentionally the one visual metric. 0 -> cool green, ~20 -> yellow,
-// 40+ -> warm red. Clamp beyond 50 so extreme outliers don't flatten the scale.
-const evHue=ev=>Math.max(0,Math.min(120,120-(Math.min(ev,50)/50)*120))
-const evAlpha=ev=>Math.max(.18,Math.min(.95,.24+Math.sqrt(Math.min(ev,50)/50)*.71))
-
-const sideLabel=side=>{
-  if(side==='you')return'You'
-  const opponent=context?.state?.players.find(p=>p.id!==context.myId)
-  return opponent?.name||'Opponent'
-}
+// EV = average best score placing a tile here, including zero for racks
+// without a legal play here. It is not win probability or multi-turn equity.
+// Independent blue/red channels on the same fixed EV scale.
 const sidePhase=side=>{
   if(side==='you')return context?.preview?'After refill':'Current rack'
-  return context?.preview?'Reply to preview':'Possible reply'
+  return context?.preview?'Reply to preview':'Possible rack'
 }
 
 function unavailable(message='Unavailable'){
@@ -44,7 +47,7 @@ export function initThreats(words){
   if(!panel||!status||!phase||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev3',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev4',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       if(data.id!==request)return
       results[data.side]=data
@@ -76,50 +79,24 @@ function updateStatus(){
 
 function hideTip(){
   active=null
-  pinned=false
   tip.hidden=true
   board.querySelectorAll('.opponent-ghost').forEach(el=>el.remove())
   board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
   board.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
 }
-function positionTip(){
-  if(active===null||tip.hidden)return
-  const target=board.children[active.index]
-  if(!target)return
-  const rect=target.getBoundingClientRect(),width=tip.offsetWidth,height=tip.offsetHeight
-  tip.style.left=`${Math.max(8,Math.min(innerWidth-width-8,rect.left+rect.width/2-width/2))}px`
-  const top=rect.top-height-12
-  tip.style.top=`${Math.max(8,Math.min(innerHeight-height-8,top>=8?top:rect.bottom+12))}px`
-}
-function showTip(index,side){
-  const data=results[side]
-  const result=data?.result
-  const ev=evAt(result,index)
-  if(!result||ev<=0)return
-
-  const chance=playChance(result,index)
-  const best=bestScore(result,index)
-  const move=result.examples?.[index]
-
-  active={index,side}
-  tip.dataset.side=side
-  tip.style.setProperty('--ev-hue',evHue(ev))
-
-  tip.innerHTML=`<div class="heat-tip-head">
-      <span class="heat-side-shape ${side}"></span>
-      <b>${sideLabel(side)}</b>
-      <small>${sidePhase(side)} · ${coord(index)}</small>
-    </div>
-    <div class="ev-primary">
-      <span>Expected value</span>
-      <strong>${ev.toFixed(1)}<small> pts</small></strong>
-    </div>
-    <div class="ev-details">
-      <span>Playable <b>${data.exact?'': '≈'}${Math.round(chance*100)}%</b></span>
-      <span>Best sampled <b>${best || '—'}</b></span>
-    </div>
-    ${move?`<div class="heat-example"><span>Example</span><b>${move.word}</b><strong>${move.score}</strong></div>`:''}
-    <footer>${data.exact?'Exact from known tiles':`${result.samples} sampled racks · EV includes zero when unusable`}</footer>`
+function showTip(index){
+  if(!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
+  active={index}
+  tip.innerHTML=`<div class="heat-tip-head"><b>${coord(index)}</b><small>Expected pts</small></div>`+SIDES.map(side=>{
+    const data=results[side],result=data?.result
+    const ready=!!result?.samples
+    const note=ready?(data.exact?'exact':`${result.samples} racks`):(data?.error?'unavailable':'sampling…')
+    return `<div class="dual-ev" data-side="${side}">
+      <span>${side==='you'?'You':'Opponent'} <small>${note}</small></span>
+      <strong>${ready?evAt(result,index).toFixed(1):'—'}</strong>
+      <small class="dual-phase">${sidePhase(side)}</small>
+    </div>`
+  }).join('')
 
   tip.hidden=false
   board.querySelectorAll('.opponent-ghost').forEach(el=>el.remove())
@@ -128,24 +105,17 @@ function showTip(index,side){
 
   const cell=board.children[index]
   cell?.classList.add('forecast-focus')
-  cell?.querySelector(`[data-side="${side}"].heat-hit`)?.setAttribute('aria-describedby',tip.id)
+  cell?.setAttribute('aria-describedby',tip.id)
 
-  if(move){
-    for(const p of move.placements){
-      const tile=document.createElement('span')
-      tile.className='opponent-ghost'
-      tile.dataset.side=side
-      tile.style.setProperty('--ev-hue',evHue(ev))
-      tile.textContent=p.letter+(p.blank?'·':'')
-      board.children[p.r*SIZE+p.c]?.append(tile)
-    }
-  }
-  positionTip()
+  // Keep forecast examples off the board: they are not necessarily playable
+  // with your rack, and must never obscure the actual move preview.
 }
 
 function clearPaint(){
   hideTip()
-  board.querySelectorAll('.heat-hit').forEach(el=>el.remove())
+  painted=null
+  board.classList.remove('heat-cloud')
+  board.style.removeProperty('background-image')
   for(const cell of board.children){
     if(cell.dataset.heatTitle!==undefined){
       cell.title=cell.dataset.heatTitle
@@ -156,46 +126,21 @@ function clearPaint(){
 
 function paint(){
   if(!board)return
-  board.classList.add('heat-both')
-  for(const side of SIDES){
-    const data=results[side]
-    const result=data?.result
-    if(!result?.samples)continue
-
-    for(let i=0;i<SIZE*SIZE;i++){
-      const ev=evAt(result,i)
-      const cell=board.children[i]
-      if(!cell)continue
-
-      let button=cell.querySelector(`[data-side="${side}"].heat-hit`)
-      if(ev<=.05){
-        button?.remove()
-        continue
-      }
-      if(cell.hasAttribute('title')){cell.dataset.heatTitle=cell.title;cell.removeAttribute('title')}
-
-      if(!button){
-        button=document.createElement('button')
-        button.className='heat-hit'
-        button.dataset.side=side
-        button.innerHTML='<i aria-hidden="true"></i>'
-        button.onpointerenter=e=>{if(e.pointerType!=='touch'&&!pinned)showTip(i,side)}
-        button.onpointerleave=()=>{if(!pinned)hideTip()}
-        button.onfocus=()=>{if(!pinned)showTip(i,side)}
-        button.onblur=()=>{if(!pinned)hideTip()}
-        button.onclick=()=>{
-          if(pinned&&active?.index===i&&active?.side===side)hideTip()
-          else{pinned=true;showTip(i,side)}
-        }
-        cell.append(button)
-      }
-
-      button.style.setProperty('--ev-hue',evHue(ev))
-      button.style.setProperty('--ev-alpha',evAlpha(ev).toFixed(3))
-      button.setAttribute('aria-label',`${sideLabel(side)}, ${coord(i)}: ${ev.toFixed(1)} expected points`)
-    }
+  const pair=SIDES.map(side=>results[side]?.result)
+  if(!enabled||!pair.some(result=>result?.samples)||!brush){clearPaint();return}
+  board.classList.add('heat-cloud')
+  if(!painted||pair.some((result,i)=>result!==painted[i])){
+    const values=pair.map(result=>result?.samples?result.scores.map(score=>score/result.samples):Array(SIZE*SIZE).fill(0))
+    const image=brush.createImageData(240,240)
+    image.data.set(dualCloudPixels(...values))
+    brush.putImageData(image,0,0)
+    board.style.backgroundImage=`url("${canvas.toDataURL()}")`
+    painted=pair
   }
-  if(active!==null)showTip(active.index,active.side)
+  for(const cell of board.children){
+    if(cell.hasAttribute('title')){cell.dataset.heatTitle=cell.title;cell.removeAttribute('title')}
+  }
+  if(active!==null)showTip(active.index)
 }
 
 export function updateThreats(state,selected,myId){
@@ -236,10 +181,9 @@ export function updateThreats(state,selected,myId){
   status.dataset.state='busy'
   panel.setAttribute('aria-busy','true')
 
-  const counts={...DISTRIBUTION}
-  for(const row of state.board)for(const tile of row)if(tile)counts[tile.blank?'?':tile.letter]--
-  for(const tile of mine?.rack||[])counts[tile]--
-  const pool=Object.entries(counts).flatMap(([letter,n])=>Array(Math.max(0,n)).fill(letter))
+  // Use the pre-preview board AND full rack: played tiles must not become
+  // available to either the opponent or our hypothetical refill.
+  const pool=unseenPool(state.board,mine?.rack||[])
   const id=request
 
   timer=setTimeout(()=>{
@@ -263,7 +207,18 @@ export function updateThreats(state,selected,myId){
   },100)
 }
 
-document.addEventListener('pointerdown',e=>{if(!e.target.closest('.heat-hit,.heat-tooltip'))hideTip()})
+board.addEventListener('pointermove',e=>{
+  const cell=e.target.closest('.cell')
+  if(!cell)return
+  const index=Number(cell.dataset.r)*SIZE+Number(cell.dataset.c)
+  if(enabled)showTip(index)
+  else hideTip()
+})
+board.addEventListener('pointerleave',hideTip)
+board.addEventListener('focusin',e=>{
+  const cell=e.target.closest('.cell')
+  if(cell&&enabled)showTip(Number(cell.dataset.r)*SIZE+Number(cell.dataset.c))
+})
+board.addEventListener('focusout',hideTip)
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#board'))hideTip()})
 document.addEventListener('keydown',e=>{if(e.key==='Escape')hideTip()})
-window.addEventListener('resize',positionTip)
-window.addEventListener('scroll',positionTip,true)

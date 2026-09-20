@@ -8,7 +8,7 @@
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./polish.css">
-  <link rel="stylesheet" href="./threats.css?v=ev3">
+  <link rel="stylesheet" href="./threats.css?v=cloud2">
 </head>
 <body>
 <div id="app">
@@ -54,6 +54,7 @@
       <div class="clock-strip" id="clockStrip"></div>
       <div class="top-actions">
         <button class="sound-button" id="soundBtn" title="Enable sounds" aria-label="Enable sounds" aria-pressed="false">♪<span>Sound off</span></button>
+        <button class="rules-link" id="rulesBtn">How to play</button>
         <button class="stats-button" id="statsBtn" title="Game statistics" aria-label="Game statistics">▦</button>
         <div class="connection" id="connection" title="Connecting"><i></i><span>Connecting</span></div>
         <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
@@ -64,8 +65,8 @@
       <aside class="left-rail">
         <div class="players" id="players"></div>
 
-        <section class="rail-card tracker-card">
-          <div class="rail-heading"><span>Unseen tiles</span><strong id="unseenCount">—</strong></div>
+        <details class="rail-card tracker-card">
+          <summary>Tile pool <strong id="unseenCount">—</strong></summary>
           <div class="tile-tracker" id="tileTracker"></div>
           <div class="tracker-foot">
             <span>Bag <b id="bagCount">—</b></span>
@@ -73,13 +74,12 @@
             <span>Blanks <b id="blankCount">—</b></span>
           </div>
           <div class="bag-meter"><i id="bagMeter"></i></div>
-        </section>
+        </details>
 
         <details class="rail-card stats-card">
           <summary>Game insights</summary>
           <div class="stat-grid" id="statGrid"></div>
         </details>
-        <button class="rules-link" id="rulesBtn">How to play <span>↗</span></button>
 
         <section class="history-card">
           <div class="rail-heading"><span>Recent</span></div>
@@ -94,20 +94,24 @@
         <div class="rack-zone">
         <section id="threatPanel" class="threat-panel hidden" aria-label="Future move forecast">
           <div class="forecast-label">
-            <span>Future moves</span>
+            <span>EV heatmap</span>
             <b id="threatPhase">Current board</b>
           </div>
-          <div class="forecast-legend" aria-label="Left half is you; right half is opponent; color shows expected value">
-            <span class="side-you"><i></i>You</span>
-            <span class="side-opponent"><i></i>Opponent</span>
-            <span class="ev-scale"><i></i><small>low EV</small><b>high EV</b></span>
+          <div class="heat-views">
+            <button type="button" id="heatToggle" aria-pressed="true" aria-label="Show both players’ EV heatmap">Heatmap on</button>
+          </div>
+          <div class="forecast-legend dual-legend" aria-label="Blue: you. Red: opponent. Purple: both. Brighter means higher EV on a shared 0–50+ point scale. Cloud edges are smoothed.">
+            <span class="legend-you"><i></i>You</span>
+            <span class="legend-opponent"><i></i>Opponent</span>
+            <span class="legend-both"><i></i>Both</span>
+            <small>brighter = higher EV</small>
           </div>
           <span id="threatStatus" role="status">Sampling</span>
         </section>
           <div class="board-legend" aria-label="Board bonuses"><span><i class="tw"></i>3× word</span><span><i class="dw"></i>2× word</span><span><i class="tl"></i>3× letter</span><span><i class="dl"></i>2× letter</span></div>
           <div class="rack-label"><span>Your rack</span><small id="rackHint"></small></div>
           <div class="rack" id="rack"></div>
-          <div class="preview-bar" id="previewBar" role="status"><span id="previewText">Select a word to preview it on the board</span><button id="clearPreview" class="hidden" aria-label="Clear preview" title="Clear preview (Escape)">×</button></div>
+          <div class="preview-bar" id="previewBar" role="status"><span id="previewText">Click a square or choose a word to preview</span><button id="clearPreview" class="hidden" aria-label="Clear preview" title="Clear preview (Escape)">×</button></div>
           <div class="turn-actions">
             <button class="ghost" id="exchangeBtn">↻ Swap</button>
             <button class="ghost" id="passBtn">Pass</button>
@@ -118,7 +122,7 @@
 
       <aside class="moves-panel">
         <div class="moves-head"><div><div class="section-kicker">THE OPEN WORDBOOK</div><h2>Available plays</h2></div><div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div></div>
-        <p class="moves-intro">Pick a word. Explore its placements.</p>
+        <p class="moves-intro">Click a square for its best play, or choose a word.</p>
         <div class="moves-tools">
           <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find a word…" aria-label="Filter available words" type="search"></div>
           <div class="sort-control" id="moveSort">
@@ -140,6 +144,6 @@
   <div class="modal-layer hidden" id="modalLayer"><div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game dialog" tabindex="-1"></div></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
-<script type="module" src="./app.js?v=ev3"></script>
+<script type="module" src="./app.js?v=cloud2"></script>
 </body>
 </html>

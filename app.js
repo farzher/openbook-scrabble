@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats} from './threat-ui.js?v=ev3'
+import {initThreats,updateThreats} from './threat-ui.js?v=cloud2'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -423,6 +423,24 @@ function finishText(){
   const w=a.score>b.score?a:b
   return`${w.name} wins · ${w.score}–${w===a?b.score:a.score}`
 }
+// Board selection always uses legal current-rack moves, never forecast examples.
+function chooseSquare(cell){
+  if(!state||state.status!=='playing'||state.players[state.turn]?.id!==myId)return
+  const r=Number(cell.dataset.r),c=Number(cell.dataset.c)
+  const candidates=moves.filter(m=>m.placements.some(p=>p.r===r&&p.c===c)).sort((a,b)=>b.score-a.score)
+  if(!candidates.length){toast(moves.length?'No available play on that square.':'No plays ready yet.');return}
+  const current=selected?candidates.findIndex(m=>keyOfMove(m)===keyOfMove(selected)):-1
+  const next=candidates[(current+1)%candidates.length]
+  expandedWord=next.word
+  chooseMove(next)
+}
+els.board.addEventListener('click',e=>{const cell=e.target.closest('.cell');if(cell)chooseSquare(cell)})
+els.board.addEventListener('keydown',e=>{
+  const cell=e.target.closest('.cell');if(!cell)return
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();chooseSquare(cell)}
+  const delta={ArrowRight:1,ArrowLeft:-1,ArrowDown:15,ArrowUp:-15}[e.key]
+  if(delta){e.preventDefault();const i=Number(cell.dataset.r)*15+Number(cell.dataset.c);els.board.children[Math.max(0,Math.min(224,i+delta))]?.focus()}
+})
 function renderBoard(){
   const preview=new Map((selected?.placements||[]).map(p=>[`${p.r},${p.c}`,p]))
   const last=new Set((state.lastPlay||[]).map(x=>x.join(',')))
@@ -430,6 +448,9 @@ function renderBoard(){
   for(const cell of els.board.children){
     const r=+cell.dataset.r,c=+cell.dataset.c,k=`${r},${c}`
     cell.innerHTML=''
+    cell.setAttribute('role','button')
+    cell.tabIndex=r===7&&c===7?0:-1
+    cell.setAttribute('aria-label',`${String.fromCharCode(65+c)}${r+1}${state.board[r][c]?`: ${state.board[r][c].letter}`:': preview best play; click again for next'}`)
     cell.classList.toggle('last-play',last.has(k))
     const p=preview.get(k),b=state.board[r][c]
     if(b){
@@ -582,7 +603,7 @@ function updatePreview(){
   updateThreats(state,selected,myId)
   const mine=state?.status==='playing'&&state.players[state.turn]?.id===myId
   $('#previewBar').classList.toggle('has-preview',!!selected)
-  $('#previewText').innerHTML=selected?`<b>${selected.word}</b><span>${coord(selected)} · ${selected.placements.length} tiles</span><strong>+${selected.score} <small>pts</small></strong>`:mine?'Select a word to preview it on the board':state?.status==='finished'?'Game complete — nicely played.':'Your next move is worth the wait.'
+  $('#previewText').innerHTML=selected?`<b>${selected.word}</b><span>${coord(selected)} · ${selected.placements.length} tiles</span><strong>+${selected.score} <small>pts</small></strong>`:mine?'Click a square or choose a word to preview':state?.status==='finished'?'Game complete — nicely played.':'Your next move is worth the wait.'
   $('#clearPreview').classList.toggle('hidden',!selected)
   $('#mobilePreview').classList.toggle('hidden',!selected||els.game.classList.contains('hidden'))
   $('#mobilePreviewWord').textContent=selected?.word||''
@@ -678,7 +699,7 @@ function showRename(){
   input.onkeydown=e=>{if(e.key==='Enter')save()}
 }
 function showRules(){
-  openModal(`<h2>Openbook Scrabble</h2><p>Standard Scrabble, except every legal play in your rack is shown.</p><ul class="rules-list"><li>Standard board, tiles, premiums and 50-point bingo.</li><li>The first word crosses the center.</li><li>Swap only while 7+ tiles remain.</li><li>Six scoreless turns ends the game.</li><li>All publicly trackable tile statistics are shown; hidden racks stay hidden.</li><li>The opponent heatmap estimates opportunities from unseen tiles, not their actual rack or their choice of move.</li><li>Wordbook: ENABLE.</li></ul><div class="modal-actions"><button class="primary" data-close>Done</button></div>`)
+  openModal(`<h2>Openbook Scrabble</h2><p>Standard Scrabble, except every legal play in your rack is shown.</p><ul class="rules-list"><li>Standard board, tiles, premiums and 50-point bingo.</li><li>The first word crosses the center.</li><li>Swap only while 7+ tiles remain.</li><li>Six scoreless turns ends the game.</li><li>All publicly trackable tile statistics are shown; hidden racks stay hidden.</li><li>Click an empty square to preview its highest-scoring play. Click again to cycle alternatives; press Play to confirm. Arrow keys navigate the board; Enter previews.</li><li>The EV heatmap shows both players together: blue is you, coral-red is the opponent, and purple means overlapping opportunities. Brighter means higher EV on the same fixed 0–50+ scale for each player. Cloud edges are visually smoothed; hover or focus a square to compare both exact values. Turn the heatmap off to see the classic board.</li><li>EV averages the best complete move score placing a tile on that square over possible racks, including zero when no play exists. It is not a sum across squares or a prediction of the opponent’s choice.</li><li>Your current rack is exact. Opponent racks and refills are sampled from unseen physical tiles, including blanks. After a preview, both forecasts use the preview board; your forecast is after refill, before any opponent reply.</li><li>Wordbook: ENABLE.</li></ul><div class="modal-actions"><button class="primary" data-close>Done</button></div>`)
 }
 function showFinished(){
   openModal(`<h2>${escapeHtml(finishText())}</h2><div class="modal-actions"><button class="ghost" data-close>Board</button><button class="primary" id="newGame">Home</button></div>`)
