@@ -101,7 +101,14 @@
         <div class="moves-head"><h2>Plays</h2><div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div></div>
         <div class="moves-tools">
           <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find…"></div>
-          <select id="moveSort" aria-label="Sort plays"><option value="score">Score</option><option value="word">A–Z</option><option value="length">Length</option></select>
+          <div class="sort-control" id="moveSort">
+            <button class="sort-button" id="moveSortButton" type="button" aria-haspopup="true" aria-expanded="false"><span id="moveSortLabel">Score</span><i></i></button>
+            <div class="sort-menu hidden" id="moveSortMenu" role="menu">
+              <button data-sort="score" class="selected" role="menuitem">Score</button>
+              <button data-sort="word" role="menuitem">A–Z</button>
+              <button data-sort="length" role="menuitem">Length</button>
+            </div>
+          </div>
         </div>
         <div class="word-summary" id="wordSummary"></div>
         <div class="moves-list" id="movesList"></div>
