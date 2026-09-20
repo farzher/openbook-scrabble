@@ -17,7 +17,7 @@ const els={
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),computing=0
+let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),pendingExchange=null,computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'standard',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -263,11 +263,17 @@ function onMessage(msg,from){
       hostGame=createGame(myId,currentName(),from,String(msg.name||'Player').slice(0,18)||'Player',{timer:roomTimer||selectedTimer()})
       persistHost();sendState();setState(publicState(hostGame,myId));return
     }
+    if(msg.t==='rename'){
+      const p=hostGame?.players.find(p=>p.id===from)
+      const name=String(msg.name||'').trim().slice(0,18)
+      if(p&&name){p.name=name;persistHost();sendState();setState(publicState(hostGame,myId))}
+      return
+    }
     if(msg.t==='action')handleAuthoritativeAction(from,msg.action)
     if(msg.t==='sync')sendState(from)
   }else{
     if(msg.t==='state')setState(msg.state)
-    if(msg.t==='error'){toast(msg.error);if(msg.state)setState(msg.state)}
+    if(msg.t==='error'){pendingExchange=null;toast(msg.error);if(msg.state)setState(msg.state)}
     if(msg.t==='full'){toast('Room is full');setTimeout(goHome,700)}
   }
 }
@@ -533,7 +539,7 @@ function join(code=els.roomInput.value){
 function parse(s){try{return JSON.parse(s)}catch{return null}}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
-  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';els.playScore.textContent='';els.clockStrip.innerHTML=''
+  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
