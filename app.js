@@ -586,10 +586,17 @@ function renderMoves(){
     const tray=open?`<div class="placement-list" role="group" aria-label="${g.word} placements">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`:''
     return `<div class="move-group ${open?'open':''}">${head}${tray}</div>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more</button>`:'')
+  positionPlacementTray()
   if(focused){
     const target=[...els.moves.querySelectorAll('button')].find(b=>focused.key?b.dataset.key===focused.key:focused.word&&b.dataset.word===focused.word)
     target?.focus({preventScroll:true})
   }
+}
+function positionPlacementTray(){
+  const group=els.moves.querySelector('.move-group.open')
+  if(!group)return
+  const middle=els.moves.scrollTop+els.moves.clientHeight/2
+  group.classList.toggle('tray-up',group.offsetTop>middle)
 }
 function coord(m){
   const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0]
@@ -876,6 +883,7 @@ els.moves.addEventListener('focusin',e=>{
   const m=moveFromElement(row)
   if(m)previewMove(m)
 })
+els.moves.addEventListener('scroll',positionPlacementTray,{passive:true})
 els.moves.onclick=e=>{
   if(e.target.closest('[data-more]')){visibleWords+=250;renderMoves();return}
   const placement=e.target.closest('.placement-row')
