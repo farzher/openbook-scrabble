@@ -221,7 +221,7 @@ export function applyMove(board,placements){
   return next
 }
 
-export const DEFAULT_TIMER = Object.freeze({mode:'standard',initialMs:25*60_000,ettRate:.10})
+export const DEFAULT_TIMER = Object.freeze({mode:'farzher',initialMs:5*60_000,ettRate:.10})
 
 export function normalizeTimerConfig(config={}){
   const mode=['standard','farzher','off'].includes(config.mode)?config.mode:'standard'
