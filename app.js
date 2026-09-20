@@ -7,7 +7,7 @@ const DIRECTORY_TTL=12_000
 const $=s=>document.querySelector(s)
 const els={
   landing:$('#landing'),game:$('#game'),name:$('#nameInput'),roomInput:$('#roomInput'),
-  create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),timerPreset:$('#timerPresetBtn'),timerPresetMode:$('#timerPresetMode'),timerPresetTime:$('#timerPresetTime'),
+  create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),resume:$('#resumeBtn'),resumeLabel:$('#resumeLabel'),timerPreset:$('#timerPresetBtn'),timerPresetMode:$('#timerPresetMode'),timerPresetTime:$('#timerPresetTime'),
   board:$('#board'),rack:$('#rack'),players:$('#players'),bagCount:$('#bagCount'),bagMeter:$('#bagMeter'),unseenCount:$('#unseenCount'),oppRackCount:$('#oppRackCount'),blankCount:$('#blankCount'),tileTracker:$('#tileTracker'),statGrid:$('#statGrid'),statsBtn:$('#statsBtn'),
   history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),summary:$('#wordSummary'),
   search:$('#moveSearch'),sort:$('#moveSort'),turn:$('#turnBanner'),connection:$('#connection'),
@@ -20,7 +20,7 @@ let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,st
 let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),pendingExchange=null,computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
-const DEFAULT_PREFS={mode:'standard',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
+const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
 let timerPrefs=loadTimerPrefs()
 let roomTimer=null
 
@@ -33,7 +33,7 @@ const funnyName=()=>{const a=new Uint32Array(2);crypto.getRandomValues(a);return
 function loadTimerPrefs(){
   try{
     const p={...DEFAULT_PREFS,...JSON.parse(localStorage.getItem('openbook-timer')||'{}')}
-    if(!['standard','farzher','off'].includes(p.mode))p.mode='standard'
+    if(!['standard','farzher','off'].includes(p.mode))p.mode=DEFAULT_PREFS.mode
     p.standardMs=Math.max(60_000,Math.min(60*60_000,Number(p.standardMs)||DEFAULT_PREFS.standardMs))
     p.farzherMs=Math.max(60_000,Math.min(60*60_000,Number(p.farzherMs)||DEFAULT_PREFS.farzherMs))
     p.ettRate=Math.max(.01,Math.min(.5,Number(p.ettRate)||DEFAULT_PREFS.ettRate))
@@ -224,7 +224,23 @@ function persistHost(){
 }
 function persistIdentity(){
   localStorage.setItem(`openbook-player-${room}`,JSON.stringify({myId,role,name:currentName()}))
+  localStorage.setItem('openbook-recent-room',room)
 }
+function recentRoom(){
+  const code=localStorage.getItem('openbook-recent-room')
+  if(!code)return null
+  const saved=parse(localStorage.getItem(`openbook-player-${code}`))
+  return saved?.myId?{code,saved}:null
+}
+function renderResume(){
+  const recent=recentRoom()
+  els.resume.classList.toggle('hidden',!recent)
+  if(!recent)return
+  const host=safeParse(localStorage.getItem(`openbook-host-${recent.code}`))
+  const status=host?.game?.status
+  els.resumeLabel.textContent=`${status==='finished'?'Review':'Resume'} · ${recent.code}`
+}
+function safeParse(s){try{return JSON.parse(s)}catch{return null}}
 function send(msg){lobby?.send(msg)}
 function sendState(targetId=null){
   if(!hostGame)return
@@ -610,14 +626,14 @@ function join(code=els.roomInput.value){
     }
   })
 }
-function parse(s){try{return JSON.parse(s)}catch{return null}}
+function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
   lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
-  history.replaceState(null,'',location.pathname);closeModal();renderDirectory()
+  history.replaceState(null,'',location.pathname);closeModal();renderDirectory();renderResume()
 }
 
 
@@ -687,6 +703,7 @@ function startClockRendering(){
 }
 
 els.players.onclick=e=>{if(e.target.closest('[data-rename]'))showRename()}
+els.resume.onclick=()=>{const recent=recentRoom();if(recent)join(recent.code)}
 els.statsBtn.onclick=showStats
 els.timerPreset.onclick=openTimerSettings
 els.create.onclick=create
@@ -728,7 +745,7 @@ buildDemo();buildBoard()
 let initialName=localStorage.getItem('openbook-name')
 if(!initialName){initialName=funnyName();saveName(initialName)}
 els.name.value=initialName
-renderTimerPreset();connectDirectory()
+renderTimerPreset();renderResume();connectDirectory()
 const params=new URLSearchParams(location.search),invite=params.get('room')?.toUpperCase()
 if(invite){
   els.roomInput.value=invite
