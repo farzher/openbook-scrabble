@@ -15,9 +15,15 @@ document.body.append(tip)
 let worker=null,request=0,key='',timer=null,context=null,results={},active=null,pinned=false
 const SIDES=['you','opponent']
 const coord=i=>`${String.fromCharCode(65+i%SIZE)}${Math.floor(i/SIZE)+1}`
-const scoreHue=score=>Math.max(0,Math.min(120,120-score*1.2))
-const topChance=(result,index)=>result?.samples?((result.topHits?.[index]||0)/result.samples):0
-const topScore=(result,index)=>result?.topScores?.[index]||result?.examples?.[index]?.score||0
+const evAt=(result,index)=>result?.samples?(result.scores?.[index]||0)/result.samples:0
+const playChance=(result,index)=>result?.samples?(result.hits?.[index]||0)/result.samples:0
+const bestScore=(result,index)=>result?.topScores?.[index]||result?.examples?.[index]?.score||0
+
+// EV is intentionally the one visual metric. 0 -> cool green, ~20 -> yellow,
+// 40+ -> warm red. Clamp beyond 50 so extreme outliers don't flatten the scale.
+const evHue=ev=>Math.max(0,Math.min(120,120-(Math.min(ev,50)/50)*120))
+const evAlpha=ev=>Math.max(.18,Math.min(.95,.24+Math.sqrt(Math.min(ev,50)/50)*.71))
+
 const sideLabel=side=>{
   if(side==='you')return'You'
   const opponent=context?.state?.players.find(p=>p.id!==context.myId)
@@ -28,32 +34,43 @@ const sidePhase=side=>{
   return context?.preview?'Reply to preview':'Possible reply'
 }
 
-function unavailable(){
-  status.textContent='Unavailable'
+function unavailable(message='Unavailable'){
+  status.textContent=message
   status.dataset.state='error'
   panel.removeAttribute('aria-busy')
 }
+
 export function initThreats(words){
+  if(!panel||!status||!phase||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev3',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       if(data.id!==request)return
       results[data.side]=data
       updateStatus()
       paint()
     }
-    worker.onerror=()=>{worker?.terminate();worker=null;unavailable()}
+    worker.onerror=event=>{
+      console.error('Future-value worker failed',event)
+      worker?.terminate();worker=null
+      unavailable()
+    }
     worker.postMessage({type:'init',words})
-  }catch{unavailable()}
+  }catch(error){
+    console.error('Future-value worker unavailable',error)
+    unavailable()
+  }
 }
 
 function updateStatus(){
+  if(!panel||!status)return
   const busy=SIDES.some(side=>!results[side]?.done&&!results[side]?.error)
   const failed=SIDES.some(side=>results[side]?.error)
   const exact=SIDES.every(side=>results[side]?.exact)
-  status.textContent=busy?'Sampling…':failed?'Partial':exact?'Exact':'Estimated'
-  status.dataset.state=busy?'busy':failed?'error':exact?'exact':'estimate'
+  const hasData=SIDES.some(side=>results[side]?.result?.samples)
+  status.textContent=failed?'Partial':busy?(hasData?'Refining…':'Sampling…'):exact?'Exact':'Estimated'
+  status.dataset.state=failed?'error':busy?'busy':exact?'exact':'estimate'
   panel.setAttribute('aria-busy',String(busy))
 }
 
@@ -77,26 +94,32 @@ function positionTip(){
 function showTip(index,side){
   const data=results[side]
   const result=data?.result
-  const move=result?.examples?.[index]
-  const score=topScore(result,index)
-  if(!result||!move||!score)return
+  const ev=evAt(result,index)
+  if(!result||ev<=0)return
 
-  const probability=topChance(result,index)
+  const chance=playChance(result,index)
+  const best=bestScore(result,index)
+  const move=result.examples?.[index]
+
   active={index,side}
   tip.dataset.side=side
-  tip.style.setProperty('--score-hue',scoreHue(score))
+  tip.style.setProperty('--ev-hue',evHue(ev))
 
   tip.innerHTML=`<div class="heat-tip-head">
       <span class="heat-side-shape ${side}"></span>
       <b>${sideLabel(side)}</b>
       <small>${sidePhase(side)} · ${coord(index)}</small>
     </div>
-    <div class="heat-main">
-      <div><span>Top score</span><strong>${score}<small> pts</small></strong></div>
-      <div><span>Chance</span><strong>${data.exact?'': '≈'}${Math.round(probability*100)}%</strong></div>
+    <div class="ev-primary">
+      <span>Expected value</span>
+      <strong>${ev.toFixed(1)}<small> pts</small></strong>
     </div>
-    <div class="heat-example"><span>Example</span><b>${move.word}</b><strong>${move.score}</strong></div>
-    <footer>${data.exact?'Exact from known tiles':`${result.samples} sampled racks`}</footer>`
+    <div class="ev-details">
+      <span>Playable <b>${data.exact?'': '≈'}${Math.round(chance*100)}%</b></span>
+      <span>Best sampled <b>${best || '—'}</b></span>
+    </div>
+    ${move?`<div class="heat-example"><span>Example</span><b>${move.word}</b><strong>${move.score}</strong></div>`:''}
+    <footer>${data.exact?'Exact from known tiles':`${result.samples} sampled racks · EV includes zero when unusable`}</footer>`
 
   tip.hidden=false
   board.querySelectorAll('.opponent-ghost').forEach(el=>el.remove())
@@ -107,13 +130,15 @@ function showTip(index,side){
   cell?.classList.add('forecast-focus')
   cell?.querySelector(`[data-side="${side}"].heat-hit`)?.setAttribute('aria-describedby',tip.id)
 
-  for(const p of move.placements){
-    const tile=document.createElement('span')
-    tile.className='opponent-ghost'
-    tile.dataset.side=side
-    tile.style.setProperty('--score-hue',scoreHue(score))
-    tile.textContent=p.letter+(p.blank?'·':'')
-    board.children[p.r*SIZE+p.c]?.append(tile)
+  if(move){
+    for(const p of move.placements){
+      const tile=document.createElement('span')
+      tile.className='opponent-ghost'
+      tile.dataset.side=side
+      tile.style.setProperty('--ev-hue',evHue(ev))
+      tile.textContent=p.letter+(p.blank?'·':'')
+      board.children[p.r*SIZE+p.c]?.append(tile)
+    }
   }
   positionTip()
 }
@@ -130,20 +155,25 @@ function clearPaint(){
 }
 
 function paint(){
+  if(!board)return
   board.classList.add('heat-both')
   for(const side of SIDES){
     const data=results[side]
     const result=data?.result
-    if(!result)continue
+    if(!result?.samples)continue
 
     for(let i=0;i<SIZE*SIZE;i++){
-      const score=topScore(result,i)
-      if(!score)continue
+      const ev=evAt(result,i)
       const cell=board.children[i]
       if(!cell)continue
-      if(cell.hasAttribute('title')){cell.dataset.heatTitle=cell.title;cell.removeAttribute('title')}
 
       let button=cell.querySelector(`[data-side="${side}"].heat-hit`)
+      if(ev<=.05){
+        button?.remove()
+        continue
+      }
+      if(cell.hasAttribute('title')){cell.dataset.heatTitle=cell.title;cell.removeAttribute('title')}
+
       if(!button){
         button=document.createElement('button')
         button.className='heat-hit'
@@ -160,27 +190,29 @@ function paint(){
         cell.append(button)
       }
 
-      const probability=topChance(result,i)
-      const hue=scoreHue(score)
-      button.style.setProperty('--diameter',`${18+72*Math.sqrt(probability)}%`)
-      button.style.setProperty('--heat-hue',hue)
-      button.style.setProperty('--marker-opacity',(0.52+0.46*Math.sqrt(probability)).toFixed(3))
-      button.setAttribute('aria-label',`${sideLabel(side)}, ${coord(i)}: top score ${score}; ${data.exact?'': 'approximately '}${Math.round(probability*100)} percent chance`)
+      button.style.setProperty('--ev-hue',evHue(ev))
+      button.style.setProperty('--ev-alpha',evAlpha(ev).toFixed(3))
+      button.setAttribute('aria-label',`${sideLabel(side)}, ${coord(i)}: ${ev.toFixed(1)} expected points`)
     }
   }
   if(active!==null)showTip(active.index,active.side)
 }
 
 export function updateThreats(state,selected,myId){
+  if(!panel||!status||!phase||!board)return
   context=state?{state,preview:selected,myId}:null
   panel.classList.toggle('hidden',!state||state.status!=='playing')
-  if(phase)phase.textContent=selected?'After preview':'Current board'
+  phase.textContent=selected?'After preview':'Current board'
 
   const mine=state?.players.find(p=>p.id===myId)
   const next=state&&state.status==='playing'
     ?JSON.stringify([myId,state.revision,state.board,mine?.rack,selected?.placements])
     :''
-  if(next===key){paint();updateStatus();return}
+  if(next===key){
+    paint()
+    updateStatus()
+    return
+  }
 
   key=next
   request++
@@ -190,7 +222,10 @@ export function updateThreats(state,selected,myId){
   clearPaint()
   panel.removeAttribute('aria-busy')
 
-  if(!next){status.textContent='';return}
+  if(!next){
+    status.textContent=''
+    return
+  }
   if(selected&&state.bagCount===0&&selected.placements.length===mine?.rack.length){
     status.textContent='Game ending'
     status.dataset.state='exact'
@@ -225,7 +260,7 @@ export function updateThreats(state,selected,myId){
         kept
       })
     }
-  },120)
+  },100)
 }
 
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('.heat-hit,.heat-tooltip'))hideTip()})
