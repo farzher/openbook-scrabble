@@ -595,8 +595,8 @@ function renderMoves(){
 function positionPlacementTray(){
   const group=els.moves.querySelector('.move-group.open')
   if(!group)return
-  const middle=els.moves.scrollTop+els.moves.clientHeight/2
-  group.classList.toggle('tray-up',group.offsetTop>middle)
+  const listRect=els.moves.getBoundingClientRect(),rowRect=group.getBoundingClientRect()
+  group.classList.toggle('tray-up',rowRect.top+rowRect.height/2>listRect.top+listRect.height/2)
 }
 function coord(m){
   const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0]
