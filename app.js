@@ -19,7 +19,7 @@ const els={
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
+let moves=[],moveByKey=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -549,7 +549,9 @@ async function computeMoves(){
   if(run!==computing||!state)return
   const found=await findMoves(state.board,mine.rack)
   if(run!==computing||!state)return
-  moves=found;renderMoves()
+  moves=found
+  moveByKey=new Map(moves.map(m=>[keyOfMove(m),m]))
+  renderMoves()
 }
 function renderMoves(){
   if(!state)return
@@ -741,7 +743,7 @@ function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
   computing++
-  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
+  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];moveByKey.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
@@ -838,7 +840,7 @@ function moveFromElement(el){
   const raw=el?.dataset.key
   if(!raw)return null
   const moveKey=decodeURIComponent(raw)
-  return moves.find(m=>keyOfMove(m)===moveKey)||null
+  return moveByKey.get(moveKey)||null
 }
 els.moves.addEventListener('pointerover',e=>{
   if(e.pointerType==='touch')return
