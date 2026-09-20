@@ -1,5 +1,8 @@
 /* A quieter table: readable controls, restrained color, and a board-first layout. */
 :root{--bg:#070811;--muted:#a8adbd;--line:#d8dcff14;--line2:#e5e7ff26;--accent:#ed9474;--accent2:#ffb495;--green:#94d5b8;--ink:#f3f0e7}
+@property --space-blue{syntax:"<number>";inherits:true;initial-value:.26}
+@property --space-red{syntax:"<number>";inherits:true;initial-value:.26}
+@property --space-purple{syntax:"<number>";inherits:true;initial-value:.40}
 button,input{touch-action:manipulation}
 button{transition:background .16s,border-color .16s,transform .16s,box-shadow .16s}
 button:focus-visible,summary:focus-visible,[role=button]:focus-visible,input:focus-visible{outline:2px solid #b2e4ce;outline-offset:4px}
@@ -8,47 +11,117 @@ button:disabled{cursor:not-allowed}
 .primary{background:linear-gradient(150deg,#f2aa89,#e38a69);color:#271d18;box-shadow:0 3px 0 #8c513b,0 6px 18px #0002}
 .primary:active{box-shadow:0 1px 0 #8c513b}
 .primary:disabled{opacity:1;background:#293333;color:#9aa3a1;box-shadow:none}
-.landing{background:#070811}
-.landing:before{background:
-  radial-gradient(circle at 18% 24%,rgba(47,105,255,.28),transparent 34%),
-  radial-gradient(circle at 82% 72%,rgba(242,61,104,.24),transparent 36%),
-  radial-gradient(circle at 54% 42%,rgba(118,67,215,.30),transparent 42%),
-  linear-gradient(135deg,#050711 0%,#0a0917 48%,#100812 100%);
-  animation:spaceNebula 28s ease-in-out infinite alternate}
+.landing{background:#060710}
+.landing:before{
+  background:
+    radial-gradient(ellipse at 16% 20%,rgba(45,103,255,.24),transparent 34%),
+    radial-gradient(ellipse at 84% 76%,rgba(244,62,108,.19),transparent 37%),
+    radial-gradient(ellipse at 53% 43%,rgba(118,67,215,.27),transparent 44%),
+    linear-gradient(135deg,#050610 0%,#090815 48%,#0e0711 100%);
+  animation:spaceNebulaHome 52s ease-in-out infinite alternate
+}
 .game{
   --space-blue:.26;--space-red:.26;--space-purple:.40;
   background:
-    radial-gradient(ellipse at 50% 42%,rgba(72,41,126,.18),transparent 46%),
-    linear-gradient(135deg,#050711 0%,#090916 46%,#100811 100%);
-  isolation:isolate
+    radial-gradient(ellipse at 48% 38%,rgba(85,49,144,.13),transparent 47%),
+    radial-gradient(ellipse at 55% 90%,rgba(38,30,85,.14),transparent 46%),
+    linear-gradient(135deg,#040610 0%,#080817 46%,#100710 100%);
+  isolation:isolate;
+  transition:
+    --space-blue 3.8s cubic-bezier(.22,.61,.36,1),
+    --space-red 3.8s cubic-bezier(.22,.61,.36,1),
+    --space-purple 3.8s cubic-bezier(.22,.61,.36,1)
 }
 .game:before{
-  display:block;content:"";position:fixed;inset:-10%;z-index:0;pointer-events:none;
+  display:block;content:"";position:fixed;inset:-14%;z-index:0;pointer-events:none;
   background:
-    radial-gradient(circle at 12% 30%,rgba(45,112,255,var(--space-blue)),transparent 31%),
-    radial-gradient(circle at 88% 68%,rgba(255,67,100,var(--space-red)),transparent 34%),
-    radial-gradient(circle at 52% 44%,rgba(121,67,220,var(--space-purple)),transparent 39%),
-    radial-gradient(circle at 72% 18%,rgba(84,46,166,.12),transparent 28%);
-  filter:saturate(1.14);
-  animation:spaceNebula 24s ease-in-out infinite alternate
+    radial-gradient(ellipse at 11% 31%,rgba(37,111,255,var(--space-blue)),transparent 28%),
+    radial-gradient(ellipse at 91% 69%,rgba(255,55,94,var(--space-red)),transparent 31%),
+    radial-gradient(ellipse at 52% 43%,rgba(125,67,228,var(--space-purple)),transparent 38%),
+    radial-gradient(ellipse at 73% 14%,rgba(72,52,164,.12),transparent 25%),
+    radial-gradient(ellipse at 28% 83%,rgba(36,72,158,.10),transparent 27%);
+  filter:saturate(1.12) blur(.15px);
+  transform-origin:50% 50%;
+  animation:spaceNebulaDrift 46s ease-in-out infinite alternate
 }
 .game:after{
-  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.14;
+  content:"";position:fixed;inset:-4%;z-index:0;pointer-events:none;
+  opacity:.24;
   background-image:
-    radial-gradient(circle at 12% 18%,#a8c8ff 0 1px,transparent 1.4px),
-    radial-gradient(circle at 68% 26%,#e2baff 0 1px,transparent 1.4px),
-    radial-gradient(circle at 83% 74%,#ffc0c9 0 1px,transparent 1.4px),
-    radial-gradient(circle at 34% 82%,#c5d3ff 0 1px,transparent 1.4px);
-  background-size:173px 149px,229px 181px,197px 211px,251px 193px;
-  animation:spaceStars 36s linear infinite alternate
+    radial-gradient(circle,#dbe8ff 0 .55px,transparent .95px),
+    radial-gradient(circle,#b8caff 0 .65px,transparent 1.05px),
+    radial-gradient(circle,#e9d4ff 0 .55px,transparent .95px),
+    radial-gradient(circle,#ffcbd4 0 .50px,transparent .90px),
+    radial-gradient(circle,rgba(150,190,255,.95) 0 1.15px,transparent 1.8px),
+    radial-gradient(circle,rgba(207,166,255,.92) 0 1.05px,transparent 1.7px),
+    radial-gradient(circle,rgba(255,150,170,.80) 0 1px,transparent 1.65px),
+    radial-gradient(circle,rgba(255,255,255,.95) 0 1.25px,rgba(255,255,255,.16) 1.8px,transparent 2.5px);
+  background-size:
+    73px 83px,
+    101px 91px,
+    127px 119px,
+    149px 137px,
+    283px 251px,
+    331px 307px,
+    397px 359px,
+    509px 463px;
+  background-position:
+    11px 17px,
+    47px 29px,
+    79px 61px,
+    19px 103px,
+    57px 37px,
+    151px 83px,
+    213px 141px,
+    307px 209px;
+  filter:drop-shadow(0 0 2px rgba(121,153,255,.22));
+  animation:
+    spaceStarsDrift 110s linear infinite alternate,
+    spaceStarsTwinkle 9s ease-in-out infinite alternate
 }
-.ambient{display:block;position:fixed;width:52vw;height:52vw;border-radius:50%;filter:blur(105px);pointer-events:none;z-index:0;mix-blend-mode:screen}
-.ambient-a{left:-22vw;top:6vh;background:radial-gradient(circle,rgba(55,126,255,var(--space-blue)) 0,transparent 66%);opacity:.34;animation:spaceDriftA 22s ease-in-out infinite alternate}
-.ambient-b{right:-24vw;bottom:-24vw;background:radial-gradient(circle,rgba(255,67,95,var(--space-red)) 0,transparent 66%);opacity:.32;animation:spaceDriftB 26s ease-in-out infinite alternate}
-@keyframes spaceNebula{to{transform:translate3d(2.5vw,-1.5vh,0) scale(1.045)}}
-@keyframes spaceStars{to{transform:translate3d(-12px,10px,0)}}
-@keyframes spaceDriftA{to{transform:translate3d(10vw,7vh,0) scale(1.12)}}
-@keyframes spaceDriftB{to{transform:translate3d(-9vw,-6vh,0) scale(.92)}}
+.ambient{
+  display:block;position:fixed;width:48vw;height:48vw;border-radius:50%;
+  filter:blur(115px);pointer-events:none;z-index:0;mix-blend-mode:screen;
+  will-change:transform
+}
+.ambient-a{
+  left:-21vw;top:8vh;
+  background:radial-gradient(circle,rgba(48,119,255,var(--space-blue)) 0,rgba(71,77,220,.09) 36%,transparent 68%);
+  opacity:.30;
+  animation:spaceDriftA 44s ease-in-out infinite alternate
+}
+.ambient-b{
+  right:-22vw;bottom:-22vw;
+  background:radial-gradient(circle,rgba(255,58,99,var(--space-red)) 0,rgba(172,48,151,.08) 38%,transparent 68%);
+  opacity:.28;
+  animation:spaceDriftB 49s ease-in-out infinite alternate
+}
+@keyframes spaceNebulaHome{
+  0%{transform:translate3d(-.6vw,.4vh,0) scale(1.01)}
+  100%{transform:translate3d(1.3vw,-.8vh,0) scale(1.035)}
+}
+@keyframes spaceNebulaDrift{
+  0%{transform:translate3d(-1vw,.6vh,0) scale(1.015) rotate(-.15deg)}
+  50%{transform:translate3d(.8vw,-.5vh,0) scale(1.035) rotate(.12deg)}
+  100%{transform:translate3d(1.6vw,.7vh,0) scale(1.02) rotate(.2deg)}
+}
+@keyframes spaceStarsDrift{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  100%{transform:translate3d(-22px,16px,0) scale(1.008)}
+}
+@keyframes spaceStarsTwinkle{
+  0%{opacity:.18;filter:drop-shadow(0 0 1px rgba(119,153,255,.14)) brightness(.92)}
+  48%{opacity:.25;filter:drop-shadow(0 0 2px rgba(151,127,255,.25)) brightness(1.04)}
+  100%{opacity:.21;filter:drop-shadow(0 0 2px rgba(255,121,163,.18)) brightness(.97)}
+}
+@keyframes spaceDriftA{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  100%{transform:translate3d(4vw,2.6vh,0) scale(1.07)}
+}
+@keyframes spaceDriftB{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  100%{transform:translate3d(-3.5vw,-2.4vh,0) scale(.95)}
+}
 .topbar{height:72px;background:#080a16e3;padding:0 24px;backdrop-filter:blur(18px)}
 .mini-mark{background:#ed9474;color:#261e1a;box-shadow:inset 0 -2px 0 #a86347;font-size:12px}
 .wordmark{font-size:15px}
