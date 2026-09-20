@@ -19,7 +19,7 @@ panel?.append(tip)
 
 let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
-let bgWorkers=[],surveyQueue=[],refineQueue=[],priorityQueue=[],bgQueued=new Set(),bgDispatch=0
+let bgWorkers=[],surveyQueue=[],refineQueue=[],priorityQueue=[],bgQueued=new Set(),bgDispatch=0,pendingPrefetch=null
 const SIDES=['you','opponent']
 const MAX_SAMPLES=96
 const CACHE_LIMIT=512
@@ -317,6 +317,11 @@ export function initThreats(words){
     }
     worker.postMessage({type:'init',words})
     bgWorkers=Array.from({length:BG_WORKERS},()=>makeBackgroundWorker(words))
+    if(pendingPrefetch){
+      const queued=pendingPrefetch
+      pendingPrefetch=null
+      queueMicrotask(()=>prefetchThreats(queued.state,queued.moves,queued.myId))
+    }
   }catch(error){
     console.error('EV worker unavailable',error)
     unavailable()
@@ -466,7 +471,11 @@ function analysisPayloads(state,selected,myId){
   return payloads
 }
 export function prefetchThreats(state,moves,myId){
-  if(!state||state.status!=='playing'||!worker||!bgWorkers.length||!moves?.length)return
+  if(!state||state.status!=='playing'||!moves?.length)return
+  if(!worker||!bgWorkers.length){
+    pendingPrefetch={state,moves:[...moves],myId}
+    return
+  }
   resetTurnCache(`${myId}|${state.revision}`)
   const turnKey=cacheTurn
   const ranked=[...moves].sort((a,b)=>b.score-a.score)
