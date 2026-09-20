@@ -10,14 +10,14 @@ const els={
   create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),resume:$('#resumeBtn'),resumeLabel:$('#resumeLabel'),timerPreset:$('#timerPresetBtn'),timerPresetMode:$('#timerPresetMode'),timerPresetTime:$('#timerPresetTime'),
   board:$('#board'),rack:$('#rack'),players:$('#players'),bagCount:$('#bagCount'),bagMeter:$('#bagMeter'),unseenCount:$('#unseenCount'),oppRackCount:$('#oppRackCount'),blankCount:$('#blankCount'),tileTracker:$('#tileTracker'),statGrid:$('#statGrid'),statsBtn:$('#statsBtn'),
   history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),summary:$('#wordSummary'),
-  search:$('#moveSearch'),sort:$('#moveSort'),turn:$('#turnBanner'),connection:$('#connection'),
+  search:$('#moveSearch'),sort:$('#moveSort'),sortButton:$('#moveSortButton'),sortLabel:$('#moveSortLabel'),sortMenu:$('#moveSortMenu'),turn:$('#turnBanner'),connection:$('#connection'),
   roomCode:$('#roomCode'),copy:$('#copyRoomBtn'),clockStrip:$('#clockStrip'),play:$('#playBtn'),playScore:$('#playScore'),
   pass:$('#passBtn'),exchange:$('#exchangeBtn'),modalLayer:$('#modalLayer'),modal:$('#modal'),
   toast:$('#toast'),rules:$('#rulesBtn'),home:$('#homeBtn'),rackHint:$('#rackHint')
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),pendingExchange=null,computing=0
+let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),pendingExchange=null,moveSort='score',computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -479,7 +479,7 @@ function renderMoves(){
   if(!myTurn){
     els.moveCount.textContent='—';els.summary.textContent='';els.moves.innerHTML='<div class="moves-empty">Waiting…</div>';return
   }
-  const q=els.search.value.trim().toUpperCase(),sort=els.sort.value
+  const q=els.search.value.trim().toUpperCase(),sort=moveSort
   const groups=new Map()
   for(const m of moves){
     if(q&&!m.word.includes(q))continue
@@ -720,7 +720,23 @@ els.play.onclick=()=>{if(selected)act({type:'play',placements:selected.placement
 els.rules.onclick=showRules
 els.modalLayer.onclick=e=>{if(e.target===els.modalLayer||e.target.closest('[data-close]'))closeModal()}
 els.search.oninput=()=>{visibleWords=250;renderMoves()}
-els.sort.onchange=()=>{visibleWords=250;renderMoves()}
+els.sortButton.onclick=e=>{
+  e.stopPropagation()
+  const open=!els.sortMenu.classList.contains('hidden')
+  els.sortMenu.classList.toggle('hidden',open)
+  els.sortButton.setAttribute('aria-expanded',String(!open))
+}
+els.sortMenu.onclick=e=>{
+  const option=e.target.closest('[data-sort]')
+  if(!option)return
+  moveSort=option.dataset.sort
+  els.sortLabel.textContent=option.textContent
+  els.sortMenu.querySelectorAll('[data-sort]').forEach(x=>x.classList.toggle('selected',x===option))
+  els.sortMenu.classList.add('hidden')
+  els.sortButton.setAttribute('aria-expanded','false')
+  visibleWords=250
+  renderMoves()
+}
 els.moves.onclick=e=>{
   if(e.target.closest('[data-more]')){visibleWords+=250;renderMoves();return}
   const placement=e.target.closest('.placement-row')
@@ -738,7 +754,7 @@ els.moves.onclick=e=>{
     if(options[0])chooseMove(options[0])
   }
 }
-document.addEventListener('click',e=>{if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
+document.addEventListener('click',e=>{if(!e.target.closest('#moveSort')){els.sortMenu.classList.add('hidden');els.sortButton.setAttribute('aria-expanded','false')}if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',()=>{persistHost();if(isOpenHost())closeRoomListing(room)})
 
 buildDemo();buildBoard()
