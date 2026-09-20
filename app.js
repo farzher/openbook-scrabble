@@ -20,7 +20,7 @@ const els={
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
 let moves=[],moveByKey=new Map(),moveEv=new Map(),moveRows=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
-let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
+let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting',directPingMs=null
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
 let timerPrefs=loadTimerPrefs()
@@ -249,12 +249,14 @@ function showGame(){
   history.replaceState(null,'',`${location.pathname}?room=${room}`)
 }
 function connection(text,online=false,relay=false){
+  if(text!=='Direct'||lastTransport!=='Direct')directPingMs=null
   lastTransport=text
+  const display=text==='Direct'&&Number.isFinite(directPingMs)?`Direct · ${Math.round(directPingMs)} ms`:text
   els.connection.classList.toggle('online',online)
   els.connection.classList.toggle('relay',relay)
-  els.connection.title=text
+  els.connection.title=display
   const label=els.connection.querySelector('span')
-  if(label)label.textContent=text
+  if(label)label.textContent=display
 }
 function persistHost(){
   if(role==='host'&&hostGame)localStorage.setItem(`openbook-host-${room}`,JSON.stringify({myId,game:hostGame}))
@@ -298,6 +300,11 @@ function connectLobby(){
       if(role==='guest')send({t:'join',name:currentName(),id:myId})
       else if(role==='host'&&hostGame&&hostGame.players.some(p=>p.id===id))sendState(id)
     }
+  }
+  lobby.onping=(id,ms)=>{
+    if(lastTransport!=='Direct'||!Number.isFinite(ms))return
+    directPingMs=ms
+    connection('Direct',true,false)
   }
   lobby.onmsg=(msg,from,method)=>{connection(method==='P2P'?'Direct':'Relay',true,method!=='P2P');onMessage(msg,from)}
 }
@@ -784,7 +791,7 @@ function goHome(){
   computing++
   lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];moveByKey.clear();moveEv.clear();moveRows.clear();selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
-  room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
+  room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting';directPingMs=null
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
   history.replaceState(null,'',location.pathname);closeModal();updatePreview();renderDirectory();renderResume()
 }
