@@ -562,25 +562,46 @@ async function computeMoves(){
 }
 function applyMoveEvRow(moveKey){
   const row=moveRows.get(moveKey),ev=moveEv.get(moveKey)
-  if(!row||!ev)return
-  const diff=ev.diff
-  const confidence=Math.min(1,Math.sqrt(Math.max(1,ev.samples||1)/24))
-  const strength=Math.min(1,Math.abs(diff)/25)*confidence
-  if(strength<.03){
-    row.classList.remove('ev-ready')
+  if(!row)return
+  if(!ev){
+    row.classList.add('ev-pending')
+    row.classList.remove('ev-ready','ev-neutral','ev-complete')
+    row.style.setProperty('--move-ev-progress','0%')
     row.style.removeProperty('--move-ev-bg')
     row.style.removeProperty('--move-ev-edge')
+    row.style.removeProperty('--move-ev-progress-color')
+    row.title='EV queued'
     return
   }
-  const blue=diff>0
-  const alpha=.035+strength*.20
-  const edge=.28+strength*.52
-  row.style.setProperty('--move-ev-bg',blue
-    ?`linear-gradient(90deg,rgba(73,154,255,${alpha}),rgba(73,154,255,${alpha*.18}) 70%,transparent)`
-    :`linear-gradient(90deg,rgba(255,103,93,${alpha}),rgba(255,103,93,${alpha*.18}) 70%,transparent)`)
-  row.style.setProperty('--move-ev-edge',blue?`rgba(91,170,255,${edge})`:`rgba(255,113,103,${edge})`)
+
+  const diff=ev.diff
+  const samples=Math.max(1,ev.samples||1)
+  const confidence=Math.min(1,Math.sqrt(samples/24))
+  const progress=ev.done?100:Math.min(99,Math.sqrt(samples/96)*100)
+  const neutral=Math.abs(diff)<.5
+  const strength=Math.min(1,Math.abs(diff)/25)*confidence
+
+  row.classList.remove('ev-pending')
   row.classList.add('ev-ready')
-  row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)} · ${ev.done?'refined':ev.samples+' samples'}`
+  row.classList.toggle('ev-neutral',neutral)
+  row.classList.toggle('ev-complete',!!ev.done)
+  row.style.setProperty('--move-ev-progress',`${progress.toFixed(1)}%`)
+
+  if(neutral){
+    row.style.setProperty('--move-ev-bg','linear-gradient(90deg,rgba(181,195,187,.055),rgba(181,195,187,.012) 72%,transparent)')
+    row.style.setProperty('--move-ev-edge','rgba(183,199,190,.30)')
+    row.style.setProperty('--move-ev-progress-color','rgba(185,202,192,.72)')
+  }else{
+    const blue=diff>0
+    const alpha=.035+strength*.20
+    const edge=.28+strength*.52
+    row.style.setProperty('--move-ev-bg',blue
+      ?`linear-gradient(90deg,rgba(73,154,255,${alpha}),rgba(73,154,255,${alpha*.18}) 70%,transparent)`
+      :`linear-gradient(90deg,rgba(255,103,93,${alpha}),rgba(255,103,93,${alpha*.18}) 70%,transparent)`)
+    row.style.setProperty('--move-ev-edge',blue?`rgba(91,170,255,${edge})`:`rgba(255,113,103,${edge})`)
+    row.style.setProperty('--move-ev-progress-color',blue?'rgba(100,178,255,.88)':'rgba(255,126,116,.88)')
+  }
+  row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)} · ${ev.done?'refined':ev.samples+' / 96 samples'}`
 }
 function bindMoveRows(){
   moveRows=new Map()
@@ -618,12 +639,13 @@ function renderMoves(){
   const selectedKey=selected?keyOfMove(selected):''
   els.moves.innerHTML=shown.map(m=>{
     const moveKey=keyOfMove(m),active=moveKey===selectedKey
-    return `<button class="move-row ${active?'selected':''}" data-key="${encodeURIComponent(moveKey)}">
+    return `<button class="move-row ${active?'selected':''} ev-pending" data-key="${encodeURIComponent(moveKey)}">
       <div class="move-copy">
         <div class="move-word">${m.word}</div>
         <div class="move-meta">${coord(m)}${m.placements.length===7?' · BINGO':''}</div>
       </div>
       <div class="move-score">${m.score}</div>
+      <span class="move-ev-progress" aria-hidden="true"><i></i></span>
     </button>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
   bindMoveRows()
