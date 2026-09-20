@@ -8,7 +8,8 @@ self.onmessage=async({data})=>{
     if(data.type==='init'){lex=new Lexicon(data.words);return}
     if(data.type==='cancel')return
     const {id,board,pool,size,kept=[]}=data
-    const result=createThreats(),total=size===0||size===pool.length?1:96,reportEvery=Math.max(1,Number(data.reportEvery)||8)
+    const requested=Math.max(1,Math.min(96,Number(data.samples)||96))
+    const result=createThreats(),total=size===0||size===pool.length?1:requested,reportEvery=Math.max(1,Number(data.reportEvery)||8)
     // Reuse the same sampled racks across previews to avoid comparison noise.
     let seed=2166136261
     for(const tile of pool)seed=Math.imul(seed^tile.charCodeAt(0),16777619)>>>0
