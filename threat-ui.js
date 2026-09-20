@@ -19,28 +19,13 @@ panel?.append(tip)
 
 let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
-let bgWorkers=[],bgQueue=[],bgQueued=new Set()
+let bgWorkers=[],surveyQueue=[],refineQueue=[],bgQueued=new Set(),bgDispatch=0
 const SIDES=['you','opponent']
 const MAX_SAMPLES=96
-const CACHE_LIMIT=384
-const PREFETCH_STAGES=[
-  // Touch everything first, then aggressively refine the leaders before
-  // returning to progressively deepen the whole rendered list.
-  {samples:1,limit:Infinity},
-  {samples:4,limit:32},
-  {samples:16,limit:12},
-  {samples:48,limit:6},
-  {samples:96,limit:3},
-  {samples:4,limit:Infinity},
-  {samples:16,limit:64},
-  {samples:48,limit:24},
-  {samples:96,limit:12},
-  {samples:16,limit:Infinity},
-  {samples:48,limit:Infinity},
-  {samples:96,limit:Infinity}
-]
+const CACHE_LIMIT=512
+const SAMPLE_STAGES=[1,4,16,48,96]
 const CORES=navigator.hardwareConcurrency||4
-// Keep roughly half the machine free for the browser, foreground EV, and OS.
+// Keep foreground interaction smooth while still using idle cores aggressively.
 const BG_WORKERS=Math.max(1,Math.min(6,Math.floor((CORES-1)/2)))
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
@@ -139,6 +124,32 @@ function handleForegroundResult(data,jobKey){
   }
   return false
 }
+function nextSampleTarget(depth){
+  return SAMPLE_STAGES.find(samples=>samples>depth)||0
+}
+function queueBackground(base,samples){
+  if(!samples||base.turnKey!==cacheTurn||foregroundBusy(base.key))return
+  const token=`${base.key}@${samples}`
+  if(bgQueued.has(token))return
+  const job={...base,samples,token}
+  bgQueued.add(token)
+  if(samples===1){
+    surveyQueue.push(job)
+  }else{
+    const stage=SAMPLE_STAGES.indexOf(samples)
+    job.priority=base.rank+stage*10
+    refineQueue.push(job)
+    refineQueue.sort((a,b)=>a.priority-b.priority||a.rank-b.rank)
+  }
+}
+function queueNextBackground(job,depth){
+  const samples=nextSampleTarget(depth)
+  if(!samples)return
+  queueBackground({
+    key:job.key,moveKey:job.moveKey,revision:job.revision,turnKey:job.turnKey,
+    state:job.state,move:job.move,myId:job.myId,rank:job.rank
+  },samples)
+}
 function finishBackground(slot){
   if(slot.job?.token)bgQueued.delete(slot.job.token)
   slot.busy=false
@@ -151,7 +162,6 @@ function finishBackground(slot){
 function handleBackgroundResult(slot,data){
   if(!slot.busy||data.id!==slot.id)return
   slot.sides[data.side]=data
-  emitMoveEv(slot.job.moveKey,slot.job.revision,slot.sides)
   if(!SIDES.every(side=>complete(slot.sides)))return
 
   const depth=sampleDepth(slot.sides)
@@ -159,18 +169,19 @@ function handleBackgroundResult(slot,data){
   const currentDepth=sampleDepth(current?.sides)
   if(!foregroundBusy(slot.key)&&depth>=currentDepth){
     const entry={
-      id:slot.id,sides:{...slot.sides},done:true,updated:performance.now(),
+      id:slot.id,sides:{...slot.sides},done:depth>=MAX_SAMPLES,updated:performance.now(),
       moveKey:slot.job.moveKey,revision:slot.job.revision,background:true,targetSamples:slot.job.samples
     }
     touchCache(slot.key,entry)
     emitMoveEv(entry.moveKey,entry.revision,entry.sides)
+    queueNextBackground(slot.job,depth)
   }
   finishBackground(slot)
 }
 function makeBackgroundWorker(words){
   const slot={worker:null,busy:false,id:0,key:'',job:null,sides:{}}
   try{
-    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-progress3',import.meta.url),{type:'module'})
+    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-continuous1',import.meta.url),{type:'module'})
     slot.worker.onmessage=({data})=>handleBackgroundResult(slot,data)
     slot.worker.onerror=event=>{
       console.error('Background EV worker failed',event)
@@ -187,19 +198,29 @@ function makeBackgroundWorker(words){
   }
   return slot
 }
+function takeBackgroundJob(){
+  while(surveyQueue.length||refineQueue.length){
+    let job
+    // While rough estimates remain, spend roughly 3/4 of worker starts on
+    // breadth and 1/4 deepening the highest-ranked moves already surveyed.
+    if(surveyQueue.length&&(!refineQueue.length||bgDispatch++%4!==3))job=surveyQueue.shift()
+    else job=refineQueue.shift()||surveyQueue.shift()
+
+    if(!job)continue
+    if(job.turnKey!==cacheTurn){bgQueued.delete(job.token);continue}
+    const current=cache.get(job.key)
+    if(foregroundBusy(job.key)||sampleDepth(current?.sides)>=job.samples){
+      bgQueued.delete(job.token)
+      continue
+    }
+    return job
+  }
+  return null
+}
 function pumpBackground(){
   for(const slot of bgWorkers){
     if(slot.busy||!slot.worker)continue
-    let job
-    while((job=bgQueue.shift())){
-      if(job.turnKey!==cacheTurn){bgQueued.delete(job.token);continue}
-      const current=cache.get(job.key)
-      if(foregroundBusy(job.key)||sampleDepth(current?.sides)>=job.samples){
-        bgQueued.delete(job.token)
-        continue
-      }
-      break
-    }
+    const job=takeBackgroundJob()
     if(!job)continue
 
     const payloads=analysisPayloads(job.state,job.move,job.myId)
@@ -208,23 +229,33 @@ function pumpBackground(){
       continue
     }
 
+    const current=cache.get(job.key)
     const id=++request
     slot.busy=true
     slot.id=id
     slot.key=job.key
     slot.job=job
     slot.sides={}
+
     for(const side of SIDES){
+      const initialResult=current?.sides?.[side]?.result||null
+      const start=initialResult?.samples||0
       slot.worker.postMessage({
         id,side,...payloads[side],
         samples:job.samples,
-        reportEvery:job.samples
+        initialResult,
+        reportEvery:Math.max(1,job.samples-start)
       })
     }
   }
 }
 function dropQueued(cacheKey){
-  bgQueue=bgQueue.filter(job=>{
+  surveyQueue=surveyQueue.filter(job=>{
+    if(job.key!==cacheKey)return true
+    bgQueued.delete(job.token)
+    return false
+  })
+  refineQueue=refineQueue.filter(job=>{
     if(job.key!==cacheKey)return true
     bgQueued.delete(job.token)
     return false
@@ -245,7 +276,7 @@ export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-progress3',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-continuous1',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       const jobKey=jobs.get(data.id)
       if(!jobKey)return
@@ -292,8 +323,10 @@ function resetTurnCache(turnKey){
     slot.job=null
     slot.sides={}
   }
-  bgQueue=[]
+  surveyQueue=[]
+  refineQueue=[]
   bgQueued.clear()
+  bgDispatch=0
   cache.clear()
   jobs.clear()
   results={}
@@ -412,30 +445,22 @@ export function prefetchThreats(state,moves,myId){
   const turnKey=cacheTurn
   const ranked=[...moves].sort((a,b)=>b.score-a.score)
 
-  // Breadth first: rough values for every rendered move before spending
-  // serious CPU refining the leaders.
-  for(const stage of PREFETCH_STAGES){
-    const batch=ranked.slice(0,Number.isFinite(stage.limit)?stage.limit:ranked.length)
-    for(const move of batch){
-      const cacheKey=analysisKey(state,move,myId)
-      const moveKey=keyOfMove(move)
-      const existing=cache.get(cacheKey)
-      if(existing){
-        if(!existing.moveKey)existing.moveKey=moveKey
-        existing.revision=state.revision
-        emitMoveEv(existing.moveKey,existing.revision,existing.sides)
-      }
-      if(sampleDepth(existing?.sides)>=stage.samples||foregroundBusy(cacheKey))continue
-
-      const token=`${cacheKey}@${stage.samples}`
-      if(bgQueued.has(token))continue
-      bgQueued.add(token)
-      bgQueue.push({
-        token,key:cacheKey,moveKey,revision:state.revision,turnKey,
-        samples:stage.samples,state,move,myId
-      })
+  ranked.forEach((move,rank)=>{
+    const cacheKey=analysisKey(state,move,myId)
+    const moveKey=keyOfMove(move)
+    const existing=cache.get(cacheKey)
+    if(existing){
+      if(!existing.moveKey)existing.moveKey=moveKey
+      existing.revision=state.revision
+      emitMoveEv(existing.moveKey,existing.revision,existing.sides)
     }
-  }
+    const depth=sampleDepth(existing?.sides)
+    const samples=nextSampleTarget(depth)
+    if(samples)queueBackground({
+      key:cacheKey,moveKey,revision:state.revision,turnKey,
+      state,move,myId,rank
+    },samples)
+  })
   pumpBackground()
 }
 
@@ -444,9 +469,11 @@ function startForegroundAnalysis(state,selected,myId){
   const payloads=analysisPayloads(state,selected,myId)
   if(!payloads){unavailable();return}
 
+  const cached=cache.get(key)
+  const seedSides=cached?.sides||{}
   const id=++request
   const entry={
-    id,sides:{},done:false,updated:performance.now(),
+    id,sides:{...seedSides},done:false,updated:performance.now(),
     moveKey:selected?keyOfMove(selected):'',revision:state.revision,foreground:true
   }
   touchCache(key,entry)
@@ -454,7 +481,10 @@ function startForegroundAnalysis(state,selected,myId){
   pending=entry.sides
   setStatus('busy','Refining EV')
   for(const side of SIDES)worker.postMessage({
-    id,side,...payloads[side],samples:MAX_SAMPLES,reportEvery:8
+    id,side,...payloads[side],
+    samples:MAX_SAMPLES,
+    initialResult:seedSides[side]?.result||null,
+    reportEvery:8
   })
 }
 export function updateThreats(state,selected,myId){
