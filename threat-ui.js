@@ -279,6 +279,8 @@ function resetTurnCache(turnKey){
     slot.busy=false
     slot.id=0
     slot.key=''
+    slot.job=null
+    slot.sides={}
   }
   bgQueue=[]
   bgQueued.clear()
@@ -398,26 +400,53 @@ export function prefetchThreats(state,moves,myId){
   if(!state||state.status!=='playing'||!worker||!bgWorkers.length||!moves?.length)return
   resetTurnCache(`${myId}|${state.revision}`)
   const turnKey=cacheTurn
-  const top=[...moves].sort((a,b)=>b.score-a.score).slice(0,PREFETCH_LIMIT)
-  for(const move of top){
-    const cacheKey=analysisKey(state,move,myId)
-    const moveKey=keyOfMove(move)
-    const existing=cache.get(cacheKey)
-    if(existing){
-      if(!existing.moveKey)existing.moveKey=moveKey
-      existing.revision=state.revision
-      emitMoveEv(existing)
-      continue
+  const ranked=[...moves].sort((a,b)=>b.score-a.score)
+
+  // Breadth first: rough values for every rendered move before spending
+  // serious CPU refining the leaders.
+  for(const stage of PREFETCH_STAGES){
+    const batch=ranked.slice(0,Number.isFinite(stage.limit)?stage.limit:ranked.length)
+    for(const move of batch){
+      const cacheKey=analysisKey(state,move,myId)
+      const moveKey=keyOfMove(move)
+      const existing=cache.get(cacheKey)
+      if(existing){
+        if(!existing.moveKey)existing.moveKey=moveKey
+        existing.revision=state.revision
+        emitMoveEv(existing.moveKey,existing.revision,existing.sides)
+      }
+      if(sampleDepth(existing?.sides)>=stage.samples||foregroundBusy(cacheKey))continue
+
+      const token=`${cacheKey}@${stage.samples}`
+      if(bgQueued.has(token))continue
+      bgQueued.add(token)
+      bgQueue.push({
+        token,key:cacheKey,moveKey,revision:state.revision,turnKey,
+        samples:stage.samples,state,move,myId
+      })
     }
-    if(bgQueued.has(cacheKey))continue
-    const payloads=analysisPayloads(state,move,myId)
-    if(!payloads)continue
-    bgQueued.add(cacheKey)
-    bgQueue.push({key:cacheKey,moveKey,revision:state.revision,turnKey,payloads})
   }
   pumpBackground()
 }
 
+function startForegroundAnalysis(state,selected,myId){
+  if(!worker||foregroundBusy(key))return
+  const payloads=analysisPayloads(state,selected,myId)
+  if(!payloads){unavailable();return}
+
+  const id=++request
+  const entry={
+    id,sides:{},done:false,updated:performance.now(),
+    moveKey:selected?keyOfMove(selected):'',revision:state.revision,foreground:true
+  }
+  touchCache(key,entry)
+  jobs.set(id,key)
+  pending=entry.sides
+  setStatus('busy','Refining EV')
+  for(const side of SIDES)worker.postMessage({
+    id,side,...payloads[side],samples:MAX_SAMPLES,reportEvery:8
+  })
+}
 export function updateThreats(state,selected,myId){
   if(!panel||!status||!board)return
   context=state?{state,preview:selected,myId}:null
@@ -450,8 +479,14 @@ export function updateThreats(state,selected,myId){
   hideTip()
   dropQueued(key)
 
-  // If this preview was already started, restore its latest partial heatmap
-  // immediately. Its worker job has continued running while it was off-screen.
+  const mine=state.players.find(p=>p.id===myId)
+  if(selected&&state.bagCount===0&&selected.placements.length===mine?.rack.length){
+    setStatus('ready','Game ending')
+    return
+  }
+
+  // A prefetched move appears instantly from its rough cached result, then
+  // the dedicated foreground worker takes it all the way to full precision.
   const cached=cache.get(key)
   if(cached){
     touchCache(key,cached)
@@ -466,32 +501,22 @@ export function updateThreats(state,selected,myId){
       ensureHeatShell()
       panel.classList.add('ev-stale')
     }
-    updateStatus(cached)
+    if(fullyRefined(cached)){
+      updateStatus(cached)
+      return
+    }
+    startForegroundAnalysis(state,selected,myId)
     return
   }
 
-  // Brand-new preview: preserve the currently painted map until both sides
-  // have their first partial result, then swap to the new map atomically.
+  // Brand-new preview: preserve the previous map until the first foreground
+  // partial arrives, then refine in-place.
   ensureHeatShell()
   panel.classList.add('ev-stale')
   setStatus('busy','Calculating EV')
-
-  const mine=state.players.find(p=>p.id===myId)
-  if(selected&&state.bagCount===0&&selected.placements.length===mine?.rack.length){
-    setStatus('ready','Game ending')
-    return
-  }
-
-  const id=++request
-  const entry={id,sides:{},done:false,updated:performance.now(),moveKey:selected?keyOfMove(selected):'',revision:state.revision}
-  touchCache(key,entry)
-  jobs.set(id,key)
-
-  if(!worker){unavailable();return}
-  const payloads=analysisPayloads(state,selected,myId)
-  if(!payloads){unavailable();return}
-  for(const side of SIDES)worker.postMessage({id,side,...payloads[side],reportEvery:8})
+  startForegroundAnalysis(state,selected,myId)
 }
+
 
 board?.addEventListener('pointermove',e=>{
   const cell=e.target.closest('.cell')
