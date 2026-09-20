@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-progress3'
+import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-continuous1'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -387,7 +387,23 @@ function setState(next){
   if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
 }
 
+function renderAtmosphere(){
+  let balance=0
+  if(state?.players?.length>1){
+    const me=state.players.find(p=>p.id===myId)
+    const opponent=state.players.find(p=>p.id!==myId)
+    if(me&&opponent)balance=Math.max(-1,Math.min(1,(me.score-opponent.score)/80))
+  }
+  const tied=1-Math.abs(balance)
+  const blue=.20+Math.max(0,balance)*.34+tied*.06
+  const red=.20+Math.max(0,-balance)*.34+tied*.06
+  const purple=.20+tied*.20
+  els.game.style.setProperty('--space-blue',blue.toFixed(3))
+  els.game.style.setProperty('--space-red',red.toFixed(3))
+  els.game.style.setProperty('--space-purple',purple.toFixed(3))
+}
 function render(){
+  renderAtmosphere()
   if(!state){
     els.turn.textContent=role==='host'?'Share your room link to invite a friend':'Joining your game…'
     els.players.innerHTML='';els.rack.innerHTML='';els.history.innerHTML='';$('#compactScores').innerHTML=''
