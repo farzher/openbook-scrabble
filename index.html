@@ -92,15 +92,21 @@
         <div class="compact-scores" id="compactScores" aria-label="Scores"></div>
         <div class="board-wrap"><div class="board-frame"><div class="board-columns" aria-hidden="true"> <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span><span>K</span><span>L</span><span>M</span><span>N</span><span>O</span></div><div class="board-rows" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span></div><div class="board" id="board" aria-label="Scrabble board"></div></div></div>
         <div class="rack-zone">
-        <section id="threatPanel" class="threat-panel hidden" aria-label="Move heatmap">
-          <div class="heat-controls" role="group" aria-label="Heatmap perspective">
-            <button data-heat-mode="both" aria-pressed="true">Both</button><button data-heat-mode="you" aria-pressed="false"><i class="heat-you-key" aria-hidden="true"></i>You</button><button data-heat-mode="opponent" aria-pressed="false"><i class="heat-opp-key" aria-hidden="true"></i>Opponent</button><button data-heat-mode="off" aria-pressed="false">Off</button>
+        <section id="threatPanel" class="threat-panel hidden" aria-label="Future move forecast">
+          <div class="forecast-top">
+            <div class="forecast-title"><span>FORECAST</span><b>Future moves</b></div>
+            <div class="forecast-state"><span id="threatPhase">Current board</span><b id="threatStatus" role="status">Sampling</b></div>
           </div>
-          <div class="heat-keys" aria-label="Circle size shows chance; color shows score">
-            <span class="heat-size-key"><i></i><i></i><i></i><span>%</span></span>
-            <span class="heat-color-key"><i></i><span>0–100+ pts</span></span>
+          <div class="forecast-toolbar">
+            <div class="heat-controls" role="group" aria-label="Show future moves for">
+              <button data-heat-mode="both" aria-pressed="true"><i class="heat-both-key" aria-hidden="true"><em></em><em></em></i>Both</button>
+              <button data-heat-mode="you" aria-pressed="false"><i class="heat-you-key" aria-hidden="true"></i>You</button>
+              <button data-heat-mode="opponent" aria-pressed="false"><i class="heat-opp-key" aria-hidden="true"></i>Opponent</button>
+              <button data-heat-mode="off" aria-pressed="false">Hide</button>
+            </div>
+            <div class="forecast-legend" aria-label="Marker size shows likelihood; glow shows scoring strength"><span><i class="legend-size"></i>Likelihood</span><span><i class="legend-glow"></i>Score</span></div>
           </div>
-          <span id="threatStatus" role="status"></span>
+          <div id="threatSummary" class="forecast-summary" aria-live="polite"></div>
         </section>
           <div class="board-legend" aria-label="Board bonuses"><span><i class="tw"></i>3× word</span><span><i class="dw"></i>2× word</span><span><i class="tl"></i>3× letter</span><span><i class="dl"></i>2× letter</span></div>
           <div class="rack-label"><span>Your rack</span><small id="rackHint"></small></div>
