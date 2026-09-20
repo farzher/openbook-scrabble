@@ -581,7 +581,7 @@ function applyMoveEvRow(moveKey){
   if(!row)return
   if(!ev){
     row.classList.add('ev-pending')
-    row.classList.remove('ev-ready','ev-neutral','ev-complete')
+    row.classList.remove('ev-ready','ev-neutral','ev-complete','ev-running')
     row.style.setProperty('--move-ev-progress','0%')
     row.style.removeProperty('--move-ev-bg')
     row.style.removeProperty('--move-ev-edge')
@@ -606,7 +606,7 @@ function applyMoveEvRow(moveKey){
   const edge=.34+confidence*.24+mix*confidence*.24
   const progressAlpha=.58+confidence*.32
 
-  row.classList.remove('ev-pending','ev-neutral')
+  row.classList.remove('ev-pending','ev-neutral','ev-running')
   row.classList.add('ev-ready')
   row.classList.toggle('ev-complete',!!ev.done)
   row.style.setProperty('--move-ev-progress',`${progress.toFixed(1)}%`)
@@ -628,6 +628,16 @@ document.addEventListener('openbook-move-ev',e=>{
   if(!ev||ev.revision!==state?.revision)return
   moveEv.set(ev.moveKey,ev)
   applyMoveEvRow(ev.moveKey)
+})
+document.addEventListener('openbook-move-ev-work',e=>{
+  const work=e.detail
+  if(!work||work.revision!==state?.revision)return
+  const row=moveRows.get(work.moveKey)
+  if(!row)return
+  row.classList.add('ev-running')
+  row.title=work.samples
+    ?`Refining EV · ${work.samples} / 96 samples`
+    :'Calculating EV…'
 })
 
 function renderMoves(){
