@@ -1,5 +1,5 @@
 import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
-import {SIZE, PREMIUM, LETTER_SCORES, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove} from './game.js'
+import {SIZE, PREMIUM, LETTER_SCORES, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -7,19 +7,22 @@ const DIRECTORY_TTL=12_000
 const $=s=>document.querySelector(s)
 const els={
   landing:$('#landing'),game:$('#game'),name:$('#nameInput'),roomInput:$('#roomInput'),
-  create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),
+  create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),timerPreset:$('#timerPresetBtn'),timerPresetMode:$('#timerPresetMode'),timerPresetTime:$('#timerPresetTime'),
   board:$('#board'),rack:$('#rack'),players:$('#players'),bagCount:$('#bagCount'),bagMeter:$('#bagMeter'),
   history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),summary:$('#wordSummary'),
   search:$('#moveSearch'),sort:$('#moveSort'),turn:$('#turnBanner'),connection:$('#connection'),
-  roomCode:$('#roomCode'),copy:$('#copyRoomBtn'),play:$('#playBtn'),playScore:$('#playScore'),
+  roomCode:$('#roomCode'),copy:$('#copyRoomBtn'),clockStrip:$('#clockStrip'),play:$('#playBtn'),playScore:$('#playScore'),
   pass:$('#passBtn'),exchange:$('#exchangeBtn'),modalLayer:$('#modalLayer'),modal:$('#modal'),
   toast:$('#toast'),rules:$('#rulesBtn'),home:$('#homeBtn'),rackHint:$('#rackHint')
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
 let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),computing=0
-let directoryWs=null,directoryPulse=null,directoryReconnect=null
+let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null
 const directoryRooms=new Map()
+const DEFAULT_PREFS={mode:'standard',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
+let timerPrefs=loadTimerPrefs()
+let roomTimer=null
 
 const uid=()=>{const a=new Uint8Array(9);crypto.getRandomValues(a);return [...a].map(x=>x.toString(36)).join('').slice(0,12)}
 const directoryId=uid()
@@ -27,6 +30,44 @@ const makeRoom=()=>{const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',a=new Uint8Ar
 const ADJECTIVES=['Sleepy','Mochi','Tiny','Cozy','Bouncy','Sunny','Silly','Lucky','Fluffy','Wiggly','Peachy','Snug','Chill','Dizzy','Nifty','Fuzzy']
 const NOUNS=['Panda','Otter','Fox','Wombat','Goblin','Gecko','Bunny','Badger','Duck','Koala','Capybara','Axolotl','Raccoon','Penguin','Bean','Moth']
 const funnyName=()=>{const a=new Uint32Array(2);crypto.getRandomValues(a);return `${ADJECTIVES[a[0]%ADJECTIVES.length]} ${NOUNS[a[1]%NOUNS.length]}`}
+function loadTimerPrefs(){
+  try{
+    const p={...DEFAULT_PREFS,...JSON.parse(localStorage.getItem('openbook-timer')||'{}')}
+    if(!['standard','farzher','off'].includes(p.mode))p.mode='standard'
+    p.standardMs=Math.max(60_000,Math.min(60*60_000,Number(p.standardMs)||DEFAULT_PREFS.standardMs))
+    p.farzherMs=Math.max(60_000,Math.min(60*60_000,Number(p.farzherMs)||DEFAULT_PREFS.farzherMs))
+    p.ettRate=Math.max(.01,Math.min(.5,Number(p.ettRate)||DEFAULT_PREFS.ettRate))
+    return p
+  }catch{return {...DEFAULT_PREFS}}
+}
+function saveTimerPrefs(){
+  localStorage.setItem('openbook-timer',JSON.stringify(timerPrefs))
+  renderTimerPreset()
+}
+function selectedTimer(){
+  if(timerPrefs.mode==='off')return {mode:'off'}
+  return normalizeTimerConfig({
+    mode:timerPrefs.mode,
+    initialMs:timerPrefs.mode==='farzher'?timerPrefs.farzherMs:timerPrefs.standardMs,
+    ettRate:timerPrefs.ettRate
+  })
+}
+function formatClock(ms,compact=false){
+  const neg=ms<0;ms=Math.abs(ms)
+  const total=Math.ceil(ms/1000),m=Math.floor(total/60),sec=total%60
+  if(compact&&m>=60)return`${Math.floor(m/60)}h ${m%60}m`
+  return`${neg?'-':''}${m}:${String(sec).padStart(2,'0')}`
+}
+function timerLabel(config=selectedTimer()){
+  if(!config||config.mode==='off')return {mode:'No timer',time:'∞'}
+  return {mode:config.mode==='farzher'?'Farzher':'Standard',time:formatClock(config.initialMs)}
+}
+function renderTimerPreset(){
+  const x=timerLabel()
+  els.timerPresetMode.textContent=x.mode
+  els.timerPresetTime.textContent=x.time
+}
+
 const saveName=n=>localStorage.setItem('openbook-name',n)
 const currentName=()=>{
   let n=(els.name.value||'').trim().slice(0,18)
@@ -97,7 +138,7 @@ function directorySend(data){
 }
 function isOpenHost(){return role==='host'&&room&&!hostGame}
 function advertiseRoom(){
-  if(isOpenHost())directorySend({t:'room',room,name:currentName()})
+  if(isOpenHost())directorySend({t:'room',room,name:currentName(),timer:roomTimer||selectedTimer()})
 }
 function closeRoomListing(code=room){
   if(code)directorySend({t:'close',room:code})
@@ -114,7 +155,7 @@ function renderDirectory(){
   els.lobbyList.innerHTML=open.map(x=>`
     <button class="lobby-row" data-room="${x.room}">
       <span class="lobby-live"><i></i></span>
-      <span class="lobby-who"><b>${escapeHtml(x.name||'Player')}</b><small>${x.room}</small></span>
+      <span class="lobby-who"><b>${escapeHtml(x.name||'Player')}</b><small>${x.room} · ${x.timer?.mode==='farzher'?'FARZHER '+formatClock(x.timer.initialMs):x.timer?.mode==='off'?'NO TIMER':formatClock(x.timer?.initialMs||25*60_000)}</small></span>
       <span class="lobby-join">Join <b>→</b></span>
     </button>
   `).join('')
@@ -149,7 +190,7 @@ function connectDirectory(){
       if(data.t==='room'){
         const code=String(data.room||'').toUpperCase()
         if(!/^[A-Z2-9]{6,8}$/.test(code))return
-        directoryRooms.set(code,{room:code,name:String(data.name||'Player').slice(0,18),seen:Date.now()})
+        directoryRooms.set(code,{room:code,name:String(data.name||'Player').slice(0,18),timer:normalizeTimerConfig(data.timer||{}),seen:Date.now()})
         renderDirectory()
       }
     }catch{}
@@ -210,7 +251,7 @@ function onMessage(msg,from){
         send({t:'full',to:from});return
       }
       closeRoomListing(room)
-      hostGame=createGame(myId,currentName(),from,String(msg.name||'Player').slice(0,18)||'Player')
+      hostGame=createGame(myId,currentName(),from,String(msg.name||'Player').slice(0,18)||'Player',{timer:roomTimer||selectedTimer()})
       persistHost();sendState();setState(publicState(hostGame,myId));return
     }
     if(msg.t==='action')handleAuthoritativeAction(from,msg.action)
@@ -225,8 +266,12 @@ function onMessage(msg,from){
 function handleAuthoritativeAction(playerId,action){
   const out=processAction(hostGame,playerId,action,lex)
   if(!out.ok){
-    send({t:'error',to:playerId,error:out.error,state:publicState(hostGame,playerId)})
-    if(playerId===myId)toast(out.error)
+    if(out.changed){
+      persistHost();sendState();setState(publicState(hostGame,myId))
+    }else{
+      send({t:'error',to:playerId,error:out.error,state:publicState(hostGame,playerId)})
+      if(playerId===myId)toast(out.error)
+    }
     return
   }
   persistHost();sendState();setState(publicState(hostGame,myId))
@@ -241,7 +286,7 @@ function act(action){
 function setState(next){
   if(!next||next.you!==myId)return
   const changed=!state||next.revision!==state.revision
-  state=next;selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';render()
+  state=next;timerSyncAt=performance.now();selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';render();startClockRendering()
   if(changed)computeMoves()
 }
 
@@ -253,7 +298,7 @@ function render(){
   els.players.innerHTML=state.players.map((p,i)=>`
     <div class="player-card ${state.turn===i&&state.status==='playing'?'active':''}">
       <div><b>${escapeHtml(p.name)}${p.id===myId?' · you':''}</b><small>${p.rackCount} tiles</small></div>
-      <strong>${p.score}</strong>
+      <div class="player-values"><strong>${p.score}</strong><em data-side-clock="${i}"></em></div>
     </div>
   `).join('')
   els.bagCount.textContent=state.bagCount
@@ -269,6 +314,8 @@ function render(){
   }
 }
 function finishText(){
+  const end=state.history?.[state.history.length-1]
+  if(end?.type==='end'&&end.reason==='time')return`${state.players[1-end.loser]?.name||'Opponent'} wins on time`
   const a=state.players[0],b=state.players[1]
   if(a.score===b.score)return`Tie · ${a.score}`
   const w=a.score>b.score?a:b
@@ -384,7 +431,7 @@ function showFinished(){
 function create(){
   loadLexicon().then(()=>{
     const n=currentName()
-    room=makeRoom();role='host';myId=uid();hostGame=null
+    room=makeRoom();role='host';myId=uid();hostGame=null;roomTimer=selectedTimer()
     persistIdentity();showGame();connectLobby();render();advertiseRoom()
   })
 }
@@ -399,7 +446,8 @@ function join(code=els.roomInput.value){
     if(role==='host'){
       const h=parse(localStorage.getItem(`openbook-host-${room}`))
       hostGame=h?.game||null
-    }
+      roomTimer=hostGame?.timer?normalizeTimerConfig(hostGame.timer):selectedTimer()
+    }else roomTimer=null
     persistIdentity();showGame();connectLobby()
     if(role==='host'){
       if(hostGame)setState(publicState(hostGame,myId))
@@ -414,11 +462,76 @@ function goHome(){
   if(isOpenHost())closeRoomListing(room)
   lobby?.close();lobby=null;state=null;hostGame=null;moves=[];selected=null;expandedWord='';els.playScore.textContent=''
   delete document.body.dataset.finished
-  room='';role='';myId=''
+  room='';role='';myId='';roomTimer=null
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
   history.replaceState(null,'',location.pathname);closeModal();renderDirectory()
 }
 
+
+function openTimerSettings(){
+  let draft={...timerPrefs}
+  const draw=()=>{
+    const activeMs=draft.mode==='farzher'?draft.farzherMs:draft.standardMs
+    openModal(`<div class="timer-modal">
+      <h2>Timer</h2>
+      <div class="timer-modes">
+        <button class="${draft.mode==='standard'?'selected':''}" data-tmode="standard"><b>Standard</b><span>Classic clock</span></button>
+        <button class="${draft.mode==='farzher'?'selected':''}" data-tmode="farzher"><b>Farzher</b><span>Adapts to pace</span></button>
+        <button class="${draft.mode==='off'?'selected':''}" data-tmode="off"><b>Off</b><span>No clock</span></button>
+      </div>
+      ${draft.mode==='off'?'':`<div class="timer-section"><label>Start time</label><div class="timer-choices">${[5,10,15,25].map(m=>`<button class="${activeMs===m*60_000?'selected':''}" data-minutes="${m}">${m}m</button>`).join('')}</div></div>`}
+      ${draft.mode==='farzher'? `<div class="timer-section"><label>Expected turn <b>${Math.round(draft.ettRate*100)}%</b></label><div class="timer-choices">${[5,10,15,20].map(p=>`<button class="${Math.round(draft.ettRate*100)===p?'selected':''}" data-ett="${p}">${p}%</button>`).join('')}</div><small>Time spent moves between clocks; the expected turn scales with the total pool.</small></div>`:''}
+      <div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="saveTimer">Done</button></div>
+    </div>`)
+    els.modal.onclick=e=>{
+      const mode=e.target.closest('[data-tmode]')?.dataset.tmode
+      if(mode){draft.mode=mode;if(mode==='farzher'&&!draft.farzherMs)draft.farzherMs=5*60_000;draw();return}
+      const mins=Number(e.target.closest('[data-minutes]')?.dataset.minutes)
+      if(mins){if(draft.mode==='farzher')draft.farzherMs=mins*60_000;else draft.standardMs=mins*60_000;draw();return}
+      const ett=Number(e.target.closest('[data-ett]')?.dataset.ett)
+      if(ett){draft.ettRate=ett/100;draw();return}
+      if(e.target.id==='saveTimer'){timerPrefs=draft;saveTimerPrefs();closeModal()}
+      else if(e.target.closest('[data-close]'))closeModal()
+    }
+  }
+  draw()
+}
+function projectedClocks(){
+  const t=state?.timer
+  if(!t||t.mode==='off'||!Array.isArray(t.clocks))return null
+  const clocks=[...t.clocks]
+  if(state.status!=='playing'||t.active<0)return clocks
+  const elapsed=Math.max(0,performance.now()-timerSyncAt)
+  clocks[t.active]-=elapsed
+  if(t.mode==='farzher')for(let i=0;i<clocks.length;i++)if(i!==t.active)clocks[i]+=elapsed
+  return clocks
+}
+function updateClocks(){
+  if(!state){els.clockStrip.innerHTML='';return}
+  const t=state.timer
+  if(!t||t.mode==='off'){
+    els.clockStrip.innerHTML=''
+    document.querySelectorAll('[data-side-clock]').forEach(x=>x.textContent='')
+    return
+  }
+  const clocks=projectedClocks()
+  const mode=t.mode==='farzher'?'F':''
+  els.clockStrip.innerHTML=state.players.map((p,i)=>`<div class="game-clock ${t.active===i&&state.status==='playing'?'active':''} ${clocks[i]<=30_000?'low':''}"><span>${p.id===myId?'YOU':escapeHtml(p.name)}</span><b>${formatClock(clocks[i])}</b>${mode?'<i>F</i>':''}</div>`).join('<em>·</em>')
+  document.querySelectorAll('[data-side-clock]').forEach(x=>{const i=+x.dataset.sideClock;x.textContent=formatClock(clocks[i]);x.classList.toggle('low',clocks[i]<=30_000)})
+}
+function startClockRendering(){
+  cancelAnimationFrame(timerFrame)
+  const tick=()=>{
+    updateClocks()
+    if(role==='host'&&hostGame&&checkStandardTimeout(hostGame)){
+      persistHost();sendState();setState(publicState(hostGame,myId));return
+    }
+    if(state?.timer&&state.status==='playing')timerFrame=requestAnimationFrame(tick)
+  }
+  tick()
+}
+
+els.timerPreset.onclick=openTimerSettings
 els.create.onclick=create
 els.join.onclick=()=>join()
 els.roomInput.onkeydown=e=>{if(e.key==='Enter')join()}
@@ -458,7 +571,7 @@ buildDemo();buildBoard()
 let initialName=localStorage.getItem('openbook-name')
 if(!initialName){initialName=funnyName();saveName(initialName)}
 els.name.value=initialName
-connectDirectory()
+renderTimerPreset();connectDirectory()
 const params=new URLSearchParams(location.search),invite=params.get('room')?.toUpperCase()
 if(invite){els.roomInput.value=invite}
 if('requestIdleCallback'in window)requestIdleCallback(()=>loadLexicon(true).catch(()=>{}))
