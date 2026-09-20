@@ -1,7 +1,7 @@
 // Quiet, synthesized feedback. No downloads; audio starts only after a gesture.
 let context
-let enabled=false
-try { enabled=localStorage.getItem('openbook-sound')==='on' } catch {}
+let enabled=true
+try { enabled=localStorage.getItem('openbook-sound')!=='off' } catch {}
 export const soundEnabled=()=>enabled
 export function unlockAudio(){
   if(!enabled)return
