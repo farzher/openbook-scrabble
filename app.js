@@ -315,7 +315,9 @@ function setState(next){
     }
     pendingExchange=null
   }
-  state=next;timerSyncAt=performance.now();selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';render();startClockRendering()
+  state=next;timerSyncAt=performance.now()
+  if(changed){selected=null;expandedWord='';visibleWords=250;els.playScore.textContent=''}
+  render();startClockRendering()
   if(changed)computeMoves()
   if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
 }
