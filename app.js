@@ -498,21 +498,78 @@ function chooseMove(m){
 
 function openModal(html){els.modal.innerHTML=html;els.modalLayer.classList.remove('hidden')}
 function closeModal(){els.modalLayer.classList.add('hidden')}
+function rackChip(letter){
+  return `<span class="swap-chip">${letter==='?'?'★':letter}<small>${letter==='?'?'':LETTER_SCORES[letter]}</small></span>`
+}
 function showExchange(){
   const me=state.players.find(p=>p.id===myId)
   selectedExchange.clear()
-  openModal(`<h2>Swap tiles</h2><div class="exchange-grid" id="exchangeGrid"></div><div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="confirmExchange" disabled>Swap</button></div>`)
-  const grid=$('#exchangeGrid')
+  openModal(`<div class="swap-modal">
+    <div class="modal-kicker">YOUR TURN</div>
+    <h2>Swap tiles</h2>
+    <p>Choose the tiles to put back. You’ll draw the same number of random replacements.</p>
+    <div class="swap-heading"><span>Your rack</span><b id="swapCount">0 selected</b></div>
+    <div class="exchange-grid" id="exchangeGrid"></div>
+    <div class="swap-return"><span>Returning</span><div id="swapReturning" class="swap-chips"><em>Choose tiles above</em></div></div>
+    <div class="swap-note"><i>↻</i><span><b id="swapDrawCount">0</b> random replacements · <b>${state.bagCount}</b> tiles in bag</span></div>
+    <div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="confirmExchange" disabled>Swap</button></div>
+  </div>`)
+  const grid=$('#exchangeGrid'),count=$('#swapCount'),returning=$('#swapReturning'),draw=$('#swapDrawCount'),confirm=$('#confirmExchange')
+  const refresh=()=>{
+    const indices=[...selectedExchange].sort((a,b)=>a-b)
+    const tiles=indices.map(i=>me.rack[i])
+    count.textContent=`${tiles.length} selected`
+    draw.textContent=tiles.length
+    returning.innerHTML=tiles.length?tiles.map(rackChip).join(''):'<em>Choose tiles above</em>'
+    confirm.disabled=!tiles.length
+    confirm.textContent=tiles.length?`Swap ${tiles.length} tile${tiles.length===1?'':'s'}`:'Swap'
+  }
   me.rack.forEach((l,i)=>{
-    const t=tileEl(l==='?'?'':l,l==='?');t.dataset.i=i
-    t.onclick=()=>{
+    const t=tileEl(l==='?'?'':l,l==='?');t.dataset.i=i;t.tabIndex=0;t.setAttribute('role','button');t.setAttribute('aria-label',`Swap ${l==='?'?'blank':l}`)
+    const toggle=()=>{
       if(selectedExchange.has(i))selectedExchange.delete(i);else selectedExchange.add(i)
-      t.classList.toggle('selected')
-      $('#confirmExchange').disabled=!selectedExchange.size
+      t.classList.toggle('selected',selectedExchange.has(i));refresh()
     }
+    t.onclick=toggle
+    t.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle()}}
     grid.append(t)
   })
-  $('#confirmExchange').onclick=()=>{const tiles=[...selectedExchange].map(i=>me.rack[i]);closeModal();act({type:'exchange',tiles})}
+  confirm.onclick=()=>{
+    const outgoing=[...selectedExchange].sort((a,b)=>a-b).map(i=>me.rack[i])
+    pendingExchange={revision:state.revision,before:[...me.rack],outgoing}
+    closeModal();act({type:'exchange',tiles:outgoing})
+  }
+}
+function showSwapResult({outgoing,incoming}){
+  openModal(`<div class="swap-result">
+    <div class="modal-kicker">SWAP COMPLETE</div>
+    <h2>New tiles</h2>
+    <div class="swap-comparison">
+      <div><span>Returned</span><div class="swap-chips">${outgoing.map(rackChip).join('')}</div></div>
+      <i>→</i>
+      <div><span>Drew</span><div class="swap-chips incoming">${incoming.map(rackChip).join('')}</div></div>
+    </div>
+    <div class="modal-actions"><button class="primary" data-close>Done</button></div>
+  </div>`)
+}
+function showRename(){
+  const me=state?.players.find(p=>p.id===myId)
+  openModal(`<div class="rename-modal"><div class="modal-kicker">PLAYER</div><h2>Your name</h2><input id="renameInput" class="rename-input" maxlength="18" value="${escapeHtml(me?.name||currentName())}" autocomplete="off"><div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="saveRename">Save</button></div></div>`)
+  const input=$('#renameInput')
+  input.focus();input.select()
+  const save=()=>{
+    const name=input.value.trim().slice(0,18)
+    if(!name)return
+    els.name.value=name;saveName(name)
+    if(role==='host'){
+      const p=hostGame?.players.find(p=>p.id===myId)
+      if(p){p.name=name;persistHost();sendState();setState(publicState(hostGame,myId))}
+      else advertiseRoom()
+    }else send({t:'rename',name})
+    closeModal()
+  }
+  $('#saveRename').onclick=save
+  input.onkeydown=e=>{if(e.key==='Enter')save()}
 }
 function showRules(){
   openModal(`<h2>Openbook Scrabble</h2><p>Standard Scrabble, except every legal play in your rack is shown.</p><ul class="rules-list"><li>Standard board, tiles, premiums and 50-point bingo.</li><li>The first word crosses the center.</li><li>Swap only while 7+ tiles remain.</li><li>Six scoreless turns ends the game.</li><li>All publicly trackable tile statistics are shown; hidden racks stay hidden.</li><li>Scores are shown; strategic advice is not.</li><li>Wordbook: ENABLE.</li></ul><div class="modal-actions"><button class="primary" data-close>Done</button></div>`)
