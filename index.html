@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171a22">
+  <title>Openbook Scrabble</title>
+  <meta name="description" content="Scrabble with the wordbook open. Every legal play is visible; the strategy is yours.">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <main class="landing" id="landing">
+      <section class="hero">
+        <div class="brand-mark" aria-hidden="true"><span>O</span><span>S</span></div>
+        <p class="eyebrow">THE WORDBOOK IS OPEN</p>
+        <h1>Openbook<br><strong>Scrabble</strong></h1>
+        <p class="lede">Every legal play is visible. No word memorization—just board control, timing, scoring, and strategy.</p>
+
+        <div class="home-actions">
+          <label class="name-field">
+            <span>Your name</span>
+            <input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="Player">
+          </label>
+          <button class="primary huge" id="createBtn">Create game <span>↗</span></button>
+          <div class="join-row">
+            <input id="roomInput" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="ROOM CODE">
+            <button class="secondary" id="joinBtn">Join</button>
+          </div>
+        </div>
+
+        <div class="home-foot">
+          <span><b>15×15</b> standard board</span>
+          <span><b>100</b> classic tiles</span>
+          <span><b>172k</b> word open book</span>
+        </div>
+      </section>
+      <section class="hero-board" aria-hidden="true">
+        <div class="demo-tiles"><i>O<small>1</small></i><i>P<small>3</small></i><i>E<small>1</small></i><i>N<small>1</small></i></div>
+        <div class="demo-grid" id="demoGrid"></div>
+      </section>
+    </main>
+
+    <main class="game hidden" id="game">
+      <header class="topbar">
+        <button class="wordmark" id="homeBtn"><span class="mini-mark">OS</span><span>Openbook <b>Scrabble</b></span></button>
+        <div class="connection" id="connection"><i></i><span>Connecting</span></div>
+        <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
+      </header>
+
+      <section class="game-shell">
+        <aside class="left-rail">
+          <div class="players" id="players"></div>
+          <div class="bag-card">
+            <span>Tiles left</span><strong id="bagCount">—</strong>
+            <div class="bag-meter"><i id="bagMeter"></i></div>
+          </div>
+          <div class="history-card">
+            <div class="panel-title"><span>Game</span><button id="rulesBtn">Rules</button></div>
+            <div class="history" id="history"><p class="muted">The first play crosses the star.</p></div>
+          </div>
+        </aside>
+
+        <section class="table">
+          <div class="turn-banner" id="turnBanner">Waiting for opponent…</div>
+          <div class="board-wrap">
+            <div class="board" id="board" aria-label="Scrabble board"></div>
+          </div>
+
+          <div class="rack-zone">
+            <div class="rack-label"><span>Your rack</span><small id="rackHint">Select a play from the open book</small></div>
+            <div class="rack" id="rack"></div>
+            <div class="turn-actions">
+              <button class="ghost" id="exchangeBtn">Exchange</button>
+              <button class="ghost" id="passBtn">Pass</button>
+              <button class="primary play-btn" id="playBtn" disabled>Play <span id="playScore"></span></button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="moves-panel">
+          <div class="moves-head">
+            <div>
+              <p class="eyebrow">OPEN BOOK</p>
+              <h2>Your plays</h2>
+            </div>
+            <div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div>
+          </div>
+          <div class="moves-tools">
+            <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find a word…"></div>
+            <select id="moveSort" aria-label="Sort plays">
+              <option value="score">Top score</option>
+              <option value="word">A–Z</option>
+              <option value="length">Longest</option>
+            </select>
+          </div>
+          <div class="word-summary" id="wordSummary"></div>
+          <div class="moves-list" id="movesList"><div class="moves-empty">Your legal plays will appear here.</div></div>
+        </aside>
+      </section>
+    </main>
+
+    <div class="modal-layer hidden" id="modalLayer">
+      <div class="modal" id="modal"></div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
