@@ -27,13 +27,19 @@ The ETT is recalculated from the settled pool after every turn, so fast play con
 
 Timer state belongs to the host-authoritative game state and is included in reconnect snapshots, so refreshing does not reset a clock.
 
+## Strategy statistics
+
+The game exposes information a perfect human tile-counter could derive from public play without revealing hidden rack contents. The tracker shows every **unseen tile** (bag + opponent rack), including exact remaining counts per letter and blanks, plus bag size and opponent rack size.
+
+The game also surfaces public strategic context such as score differential, turn count, best scoring play, bingo count, scoreless-turn pressure, move history, clocks, and connection transport. It intentionally does not expose the opponent's actual rack or exact bag composition.
+
 ## Wordbook
 
 The initial build loads **ENABLE (Enhanced North American Benchmark Lexicon)** at runtime from the `dolph/dictionary` mirror. ENABLE contains roughly 172,800 words and was released into the public domain.
 
 It is a strong no-license default, but it is **not the official North American tournament Scrabble lexicon (NWL)** and some accepted/rejected words will differ.
 
-Dictionary loading is isolated in `src/app.js`; the game engine accepts any `Lexicon`, so switching to another newline-delimited lexicon later is straightforward.
+Dictionary loading is isolated in `app.js`; the game engine accepts any `Lexicon`, so switching to another newline-delimited lexicon later is straightforward.
 
 ## Run
 
@@ -51,8 +57,8 @@ GitHub Pages can serve the repository as-is.
 
 - `index.html` — application shell
 - `styles.css` — responsive visual design
-- `src/game.js` — board rules, scoring, bag/racks, validation, move generation
-- `src/app.js` — UI, rooms, host authority, reconnect behavior
+- `game.js` — board rules, scoring, timers, bag/racks, validation, move generation
+- `app.js` — UI, rooms, live lobby directory, strategy statistics, host authority, reconnect behavior
 
 ## Multiplayer protocol
 
