@@ -8,7 +8,6 @@ const phase=document.querySelector('#threatPhase')
 const board=document.querySelector('#board')
 const evYou=document.querySelector('#boardEvYou')
 const evOpponent=document.querySelector('#boardEvOpponent')
-const evOpponentLabel=document.querySelector('#boardEvOpponentLabel')
 const toggle=document.querySelector('#heatToggle')
 
 const tip=document.createElement('div')
@@ -144,13 +143,12 @@ function hideTip(){
 function showTip(index){
   if(resultsKey!==key||!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
   active={index}
-  const opponent=context?.state?.players.find(p=>p.id!==context.myId)
   const youEv=results.you?.result?.samples?evAt(results.you.result,index):null
   const oppEv=results.opponent?.result?.samples?evAt(results.opponent.result,index):null
-  tip.innerHTML=`<div class="heat-tip-square"><b>${coord(index)}</b><span>Square EV</span></div>
-    <div class="heat-tip-player you"><span>You</span><strong>${youEv===null?'—':youEv.toFixed(1)}</strong></div>
+  tip.innerHTML=`<div class="heat-tip-square"><b>${coord(index)}</b></div>
+    <strong class="heat-tip-score you">${youEv===null?'—':youEv.toFixed(1)}</strong>
     <i class="heat-tip-vs">vs</i>
-    <div class="heat-tip-player opponent"><span>${opponent?.name||'Opponent'}</span><strong>${oppEv===null?'—':oppEv.toFixed(1)}</strong></div>`
+    <strong class="heat-tip-score opponent">${oppEv===null?'—':oppEv.toFixed(1)}</strong>`
   panel?.classList.add('inspecting')
   tip.hidden=false
   board.querySelectorAll('.forecast-focus').forEach(el=>el.classList.remove('forecast-focus'))
@@ -164,8 +162,6 @@ function renderBoardEv(){
   const you=boardEv(results.you?.result),opp=boardEv(results.opponent?.result)
   evYou.textContent=you===null?'—':you.toFixed(1)
   evOpponent.textContent=opp===null?'—':opp.toFixed(1)
-  const opponent=context?.state?.players.find(p=>p.id!==context.myId)
-  if(evOpponentLabel)evOpponentLabel.textContent=opponent?.name||'Opponent'
   panel.classList.toggle('ev-stale',resultsKey!==key)
 }
 function paint(){
