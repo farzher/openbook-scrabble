@@ -21,7 +21,7 @@
 .board-ev-title{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
 .board-ev-title>span{font:800 11px/1 'Manrope';color:#e4ece7}
 .board-ev-title>small{font-size:8px;color:#7f928c;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.board-ev-values{display:flex;align-items:center;justify-content:center;gap:11px;min-width:0;height:100%}
+.board-ev-values{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;gap:11px;min-width:0;height:auto}
 .board-ev-values>strong,.heat-tip-score{display:block;font:800 23px/23px 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.04em}
 .board-ev-values>strong.you,.heat-tip-score.you{color:#72c3ff}.board-ev-values>strong.opponent,.heat-tip-score.opponent{color:#ff8f82}
 .board-ev-values>i,.heat-tip-vs{display:block;align-self:center;font-style:normal;font:700 8px/8px 'DM Sans';color:#607078;text-transform:uppercase;transform:none}
@@ -49,7 +49,7 @@
 /* Square EV inspector completely replaces the normal strip while hovering. */
 .heat-tooltip{
   position:absolute;inset:0;z-index:5;
-  display:flex;align-items:center;justify-content:center;gap:12px;
+  display:block;
   height:100%;padding:0 12px;
   border:0;background:#101b1f;color:#edf4ee;
   pointer-events:none
@@ -57,7 +57,10 @@
 .heat-tooltip[hidden]{display:none}
 .heat-tip-square{position:absolute;left:12px;top:50%;transform:translateY(-50%)}
 .heat-tip-square>b{font:800 12px/1 'Manrope';color:#e7eeea}
-.heat-tip-score{white-space:nowrap}
+.heat-tip-score{position:absolute;top:50%;transform:translateY(-50%);white-space:nowrap}
+.heat-tip-score.you{right:calc(50% + 18px)}
+.heat-tip-score.opponent{left:calc(50% + 18px)}
+.heat-tip-vs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
 
 @media(max-width:560px){
   .threat-panel{height:46px;min-height:46px;max-height:46px;grid-template-columns:auto 1fr auto;gap:8px;padding:0 9px}
