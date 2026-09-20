@@ -24,14 +24,19 @@ const SIDES=['you','opponent']
 const MAX_SAMPLES=96
 const CACHE_LIMIT=384
 const PREFETCH_STAGES=[
+  // Touch everything first, then aggressively refine the leaders before
+  // returning to progressively deepen the whole rendered list.
   {samples:1,limit:Infinity},
   {samples:4,limit:32},
+  {samples:16,limit:12},
+  {samples:48,limit:6},
+  {samples:96,limit:3},
   {samples:4,limit:Infinity},
-  {samples:16,limit:24},
+  {samples:16,limit:64},
+  {samples:48,limit:24},
+  {samples:96,limit:12},
   {samples:16,limit:Infinity},
-  {samples:48,limit:12},
   {samples:48,limit:Infinity},
-  {samples:96,limit:8},
   {samples:96,limit:Infinity}
 ]
 const CORES=navigator.hardwareConcurrency||4
