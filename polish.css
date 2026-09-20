@@ -43,8 +43,8 @@ button:disabled{cursor:not-allowed}
   animation:spaceStars 36s linear infinite alternate
 }
 .ambient{display:block;position:fixed;width:52vw;height:52vw;border-radius:50%;filter:blur(105px);pointer-events:none;z-index:0;mix-blend-mode:screen}
-.ambient-a{left:-22vw;top:6vh;background:radial-gradient(circle,#377eff 0,transparent 66%);opacity:calc(var(--space-blue)*.34);animation:spaceDriftA 22s ease-in-out infinite alternate}
-.ambient-b{right:-24vw;bottom:-24vw;background:radial-gradient(circle,#ff435f 0,transparent 66%);opacity:calc(var(--space-red)*.32);animation:spaceDriftB 26s ease-in-out infinite alternate}
+.ambient-a{left:-22vw;top:6vh;background:radial-gradient(circle,rgba(55,126,255,var(--space-blue)) 0,transparent 66%);opacity:.34;animation:spaceDriftA 22s ease-in-out infinite alternate}
+.ambient-b{right:-24vw;bottom:-24vw;background:radial-gradient(circle,rgba(255,67,95,var(--space-red)) 0,transparent 66%);opacity:.32;animation:spaceDriftB 26s ease-in-out infinite alternate}
 @keyframes spaceNebula{to{transform:translate3d(2.5vw,-1.5vh,0) scale(1.045)}}
 @keyframes spaceStars{to{transform:translate3d(-12px,10px,0)}}
 @keyframes spaceDriftA{to{transform:translate3d(10vw,7vh,0) scale(1.12)}}
