@@ -1,6 +1,6 @@
 import {SIZE,applyMove,removeRackTiles} from './game.js'
-import {unseenPool} from './threats.js'
-import {dualCloudPixels} from './heatmap.js'
+import {unseenPool} from './threats.js?v=ev-cache1'
+import {dualCloudPixels} from './heatmap.js?v=ev-cache1'
 
 const panel=document.querySelector('#threatPanel')
 const status=document.querySelector('#threatStatus')
