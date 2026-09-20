@@ -24,14 +24,19 @@ const SIDES=['you','opponent']
 const MAX_SAMPLES=96
 const CACHE_LIMIT=384
 const PREFETCH_STAGES=[
-  {samples:2,limit:Infinity},
-  {samples:8,limit:Infinity},
-  {samples:24,limit:64},
-  {samples:48,limit:24},
-  {samples:96,limit:12}
+  {samples:1,limit:Infinity},
+  {samples:4,limit:32},
+  {samples:4,limit:Infinity},
+  {samples:16,limit:24},
+  {samples:16,limit:Infinity},
+  {samples:48,limit:12},
+  {samples:48,limit:Infinity},
+  {samples:96,limit:8},
+  {samples:96,limit:Infinity}
 ]
 const CORES=navigator.hardwareConcurrency||4
-const BG_WORKERS=CORES<=4?1:CORES<=8?2:CORES<=12?3:4
+// Keep roughly half the machine free for the browser, foreground EV, and OS.
+const BG_WORKERS=Math.max(1,Math.min(6,Math.floor((CORES-1)/2)))
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
