@@ -166,6 +166,8 @@ function hideTip(){
   board?.querySelectorAll('[aria-describedby]').forEach(el=>el.removeAttribute('aria-describedby'))
 }
 function showTip(index){
+  const r=Math.floor(index/SIZE),c=index%SIZE
+  if(context?.state?.board?.[r]?.[c]){hideTip();return}
   if(resultsKey!==key||!SIDES.some(side=>results[side]?.result?.samples)){hideTip();return}
   active={index}
   const youEv=results.you?.result?.samples?evAt(results.you.result,index):null
