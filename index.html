@@ -7,7 +7,7 @@
   <title>Openbook Scrabble</title>
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./polish.css?v=move-hover1">
+  <link rel="stylesheet" href="./polish.css?v=flat-moves1">
   <link rel="stylesheet" href="./threats.css?v=ev-center1">
 </head>
 <body>
@@ -118,20 +118,10 @@
       </section>
 
       <aside class="moves-panel">
-        <div class="moves-head"><div><div class="section-kicker">THE OPEN WORDBOOK</div><h2>Available plays</h2></div><div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div></div>
-        <p class="moves-intro">Click a square for its best play, or choose a word.</p>
-        <div class="moves-tools">
-          <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find a word…" aria-label="Filter available words" type="search"></div>
-          <div class="sort-control" id="moveSort">
-            <button class="sort-button" id="moveSortButton" type="button" aria-haspopup="true" aria-expanded="false"><span id="moveSortLabel">Score</span><i></i></button>
-            <div class="sort-menu hidden" id="moveSortMenu" role="menu">
-              <button data-sort="score" class="selected" role="menuitem">Score</button>
-              <button data-sort="word" role="menuitem">A–Z</button>
-              <button data-sort="length" role="menuitem">Length</button>
-            </div>
-          </div>
+        <div class="moves-head">
+          <div><div class="section-kicker">THE OPEN WORDBOOK</div><h2>Available plays</h2></div>
+          <div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div>
         </div>
-        <div class="word-summary" id="wordSummary"></div>
         <div class="moves-list" id="movesList"></div>
       </aside>
     </section>
@@ -141,6 +131,6 @@
   <div class="modal-layer hidden" id="modalLayer"><div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game dialog" tabindex="-1"></div></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
-<script type="module" src="./app.js?v=move-hover1"></script>
+<script type="module" src="./app.js?v=flat-moves1"></script>
 </body>
 </html>
