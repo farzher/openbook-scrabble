@@ -21,9 +21,17 @@ let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
 let bgWorkers=[],bgQueue=[],bgQueued=new Set()
 const SIDES=['you','opponent']
-const CACHE_LIMIT=96
-const PREFETCH_LIMIT=18
-const BG_WORKERS=(navigator.hardwareConcurrency||4)<=4?1:(navigator.hardwareConcurrency||4)<=8?2:3
+const MAX_SAMPLES=96
+const CACHE_LIMIT=384
+const PREFETCH_STAGES=[
+  {samples:2,limit:Infinity},
+  {samples:8,limit:Infinity},
+  {samples:24,limit:64},
+  {samples:48,limit:24},
+  {samples:96,limit:12}
+]
+const CORES=navigator.hardwareConcurrency||4
+const BG_WORKERS=CORES<=4?1:CORES<=8?2:CORES<=12?3:4
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
