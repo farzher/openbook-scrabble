@@ -1,4 +1,4 @@
-import {SIZE,applyMove,removeRackTiles} from './game.js'
+import {SIZE,applyMove,removeRackTiles,keyOfMove} from './game.js'
 import {unseenPool} from './threats.js?v=ev-concurrent1'
 import {dualCloudPixels} from './heatmap.js?v=ev-concurrent1'
 
@@ -19,8 +19,11 @@ panel?.append(tip)
 
 let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
+let bgWorkers=[],bgQueue=[],bgQueued=new Set()
 const SIDES=['you','opponent']
 const CACHE_LIMIT=96
+const PREFETCH_LIMIT=18
+const BG_WORKERS=(navigator.hardwareConcurrency||4)<=4?1:(navigator.hardwareConcurrency||4)<=8?2:3
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
@@ -60,39 +63,111 @@ function unavailable(message='EV unavailable'){
   setStatus('error',message)
   board?.classList.remove('heat-loading')
 }
+function emitMoveEv(entry){
+  if(!entry?.moveKey||!SIDES.every(side=>entry.sides[side]?.result?.samples))return
+  const you=boardEv(entry.sides.you.result),opponent=boardEv(entry.sides.opponent.result)
+  if(you===null||opponent===null)return
+  document.dispatchEvent(new CustomEvent('openbook-move-ev',{detail:{
+    revision:entry.revision,moveKey:entry.moveKey,you,opponent,diff:you-opponent,
+    samples:Math.min(entry.sides.you.result.samples,entry.sides.opponent.result.samples),
+    done:SIDES.every(side=>complete(entry.sides[side]))
+  }}))
+}
+function handleWorkerResult(data,jobKey){
+  if(!jobKey)return false
+  const entry=cache.get(jobKey)
+  if(!entry)return false
+
+  entry.sides[data.side]=data
+  entry.updated=performance.now()
+  touchCache(jobKey,entry)
+  emitMoveEv(entry)
+
+  if(jobKey===key){
+    pending=entry.sides
+    if(SIDES.every(side=>ready(pending[side]))){
+      results={...pending}
+      resultsKey=key
+      painted=null
+      paint()
+      renderBoardEv()
+    }
+    updateStatus(entry)
+  }
+
+  if(SIDES.every(side=>complete(entry.sides))){
+    entry.done=true
+    if(jobKey===key)board.classList.remove('heat-loading')
+    return true
+  }
+  return false
+}
+function makeBackgroundWorker(words){
+  const slot={worker:null,busy:false,id:0,key:''}
+  try{
+    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-prefetch1',import.meta.url),{type:'module'})
+    slot.worker.onmessage=({data})=>{
+      if(data.id!==slot.id)return
+      const done=handleWorkerResult(data,slot.key)
+      if(done){
+        slot.busy=false
+        slot.id=0
+        slot.key=''
+        pumpBackground()
+      }
+    }
+    slot.worker.onerror=event=>{
+      console.error('Background EV worker failed',event)
+      slot.worker?.terminate()
+      slot.worker=null
+      slot.busy=false
+    }
+    slot.worker.postMessage({type:'init',words})
+  }catch(error){
+    console.error('Background EV worker unavailable',error)
+  }
+  return slot
+}
+function pumpBackground(){
+  for(const slot of bgWorkers){
+    if(slot.busy||!slot.worker)continue
+    let job
+    while((job=bgQueue.shift())){
+      bgQueued.delete(job.key)
+      if(job.turnKey!==cacheTurn||cache.has(job.key))continue
+      break
+    }
+    if(!job)continue
+
+    const id=++request
+    const entry={id,sides:{},done:false,updated:performance.now(),moveKey:job.moveKey,revision:job.revision,background:true}
+    touchCache(job.key,entry)
+    slot.busy=true
+    slot.id=id
+    slot.key=job.key
+
+    for(const side of SIDES){
+      const payload=job.payloads[side]
+      slot.worker.postMessage({id,side,...payload,reportEvery:16})
+    }
+  }
+}
+function dropQueued(cacheKey){
+  if(!bgQueued.has(cacheKey))return
+  bgQueued.delete(cacheKey)
+  bgQueue=bgQueue.filter(job=>job.key!==cacheKey)
+}
 export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-concurrent1',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-prefetch1',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       const jobKey=jobs.get(data.id)
       if(!jobKey)return
-      const entry=cache.get(jobKey)
-      if(!entry)return
-
-      // Every worker update is cached immediately, including intermediate
-      // 8/16/24/... rack samples. Switching away never discards this progress.
-      entry.sides[data.side]=data
-      entry.updated=performance.now()
-      touchCache(jobKey,entry)
-
-      if(jobKey===key){
-        pending=entry.sides
-        if(SIDES.every(side=>ready(pending[side]))){
-          results={...pending}
-          resultsKey=key
-          painted=null
-          paint()
-          renderBoardEv()
-        }
-        updateStatus(entry)
-      }
-
-      if(SIDES.every(side=>complete(entry.sides))){
-        entry.done=true
+      if(handleWorkerResult(data,jobKey)){
         jobs.delete(data.id)
-        if(jobKey===key)board.classList.remove('heat-loading')
+        pumpBackground()
       }
     }
     worker.onerror=event=>{
@@ -101,6 +176,7 @@ export function initThreats(words){
       unavailable()
     }
     worker.postMessage({type:'init',words})
+    bgWorkers=Array.from({length:BG_WORKERS},()=>makeBackgroundWorker(words))
   }catch(error){
     console.error('EV worker unavailable',error)
     unavailable()
@@ -124,6 +200,14 @@ function resetTurnCache(turnKey){
   // A real turn change invalidates every hypothetical position. This is the
   // only time we globally cancel worker calculations.
   worker?.postMessage({type:'cancel'})
+  for(const slot of bgWorkers){
+    slot.worker?.postMessage({type:'cancel'})
+    slot.busy=false
+    slot.id=0
+    slot.key=''
+  }
+  bgQueue=[]
+  bgQueued.clear()
   cache.clear()
   jobs.clear()
   results={}
@@ -219,6 +303,46 @@ function analysisKey(state,selected,myId){
     .join(';')||'base'
   return `${myId}|${state.revision}|${preview}`
 }
+function analysisPayloads(state,selected,myId){
+  const mine=state.players.find(p=>p.id===myId)
+  if(!mine)return null
+  const pool=unseenPool(state.board,mine.rack||[])
+  const previewBoard=selected?applyMove(state.board,selected.placements):state.board
+  const payloads={}
+  for(const side of SIDES){
+    const kept=side==='you'
+      ?(selected?removeRackTiles(mine.rack||[],selected.placements):mine.rack||[])
+      :[]
+    const size=side==='you'
+      ?(selected?Math.min(state.bagCount,7-kept.length):0)
+      :state.players.find(p=>p.id!==myId)?.rackCount||0
+    payloads[side]={board:previewBoard,pool,size,kept}
+  }
+  return payloads
+}
+export function prefetchThreats(state,moves,myId){
+  if(!state||state.status!=='playing'||!worker||!bgWorkers.length||!moves?.length)return
+  resetTurnCache(`${myId}|${state.revision}`)
+  const turnKey=cacheTurn
+  const top=[...moves].sort((a,b)=>b.score-a.score).slice(0,PREFETCH_LIMIT)
+  for(const move of top){
+    const cacheKey=analysisKey(state,move,myId)
+    const moveKey=keyOfMove(move)
+    const existing=cache.get(cacheKey)
+    if(existing){
+      if(!existing.moveKey)existing.moveKey=moveKey
+      existing.revision=state.revision
+      emitMoveEv(existing)
+      continue
+    }
+    if(bgQueued.has(cacheKey))continue
+    const payloads=analysisPayloads(state,move,myId)
+    if(!payloads)continue
+    bgQueued.add(cacheKey)
+    bgQueue.push({key:cacheKey,moveKey,revision:state.revision,turnKey,payloads})
+  }
+  pumpBackground()
+}
 
 export function updateThreats(state,selected,myId){
   if(!panel||!status||!board)return
@@ -250,6 +374,7 @@ export function updateThreats(state,selected,myId){
 
   key=next
   hideTip()
+  dropQueued(key)
 
   // If this preview was already started, restore its latest partial heatmap
   // immediately. Its worker job has continued running while it was off-screen.
@@ -284,29 +409,14 @@ export function updateThreats(state,selected,myId){
   }
 
   const id=++request
-  const entry={id,sides:{},done:false,updated:performance.now()}
+  const entry={id,sides:{},done:false,updated:performance.now(),moveKey:selected?keyOfMove(selected):'',revision:state.revision}
   touchCache(key,entry)
   jobs.set(id,key)
 
-  // Played tiles remain unavailable to both hypothetical racks.
-  const pool=unseenPool(state.board,mine?.rack||[])
   if(!worker){unavailable();return}
-  for(const side of SIDES){
-    const kept=side==='you'
-      ?(selected?removeRackTiles(mine?.rack||[],selected.placements):mine?.rack||[])
-      :[]
-    const size=side==='you'
-      ?(selected?Math.min(state.bagCount,7-kept.length):0)
-      :state.players.find(p=>p.id!==myId)?.rackCount||0
-    worker.postMessage({
-      id,
-      side,
-      board:selected?applyMove(state.board,selected.placements):state.board,
-      pool,
-      size,
-      kept
-    })
-  }
+  const payloads=analysisPayloads(state,selected,myId)
+  if(!payloads){unavailable();return}
+  for(const side of SIDES)worker.postMessage({id,side,...payloads[side],reportEvery:8})
 }
 
 board?.addEventListener('pointermove',e=>{
