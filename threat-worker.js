@@ -20,7 +20,7 @@ self.onmessage=async({data})=>{
   if(data.type==='init'||data.type==='cancel')run++
   const token=run
   try{
-    if(data.type==='init'){lex=new Lexicon(data.words);return}
+    if(data.type==='init'){lex=new Lexicon(data.words);self.postMessage({type:'ready'});return}
     if(data.type==='cancel')return
 
     const {id,board,pool,size,kept=[]}=data
