@@ -209,7 +209,9 @@ function showGame(){
 }
 function connection(text,online=false){
   els.connection.classList.toggle('online',online)
-  els.connection.querySelector('span').textContent=text
+  els.connection.title=text
+  const label=els.connection.querySelector('span')
+  if(label)label.textContent=text
 }
 function persistHost(){
   if(role==='host'&&hostGame)localStorage.setItem(`openbook-host-${room}`,JSON.stringify({myId,game:hostGame}))
@@ -460,7 +462,7 @@ function join(code=els.roomInput.value){
 function parse(s){try{return JSON.parse(s)}catch{return null}}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
-  lobby?.close();lobby=null;state=null;hostGame=null;moves=[];selected=null;expandedWord='';els.playScore.textContent=''
+  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
@@ -520,15 +522,16 @@ function updateClocks(){
   document.querySelectorAll('[data-side-clock]').forEach(x=>{const i=+x.dataset.sideClock;x.textContent=formatClock(clocks[i]);x.classList.toggle('low',clocks[i]<=30_000)})
 }
 function startClockRendering(){
-  cancelAnimationFrame(timerFrame)
+  clearInterval(timerFrame)
   const tick=()=>{
     updateClocks()
     if(role==='host'&&hostGame&&checkStandardTimeout(hostGame)){
       persistHost();sendState();setState(publicState(hostGame,myId));return
     }
-    if(state?.timer&&state.status==='playing')timerFrame=requestAnimationFrame(tick)
+    if(!state?.timer||state.status!=='playing')clearInterval(timerFrame)
   }
   tick()
+  if(state?.timer&&state.status==='playing')timerFrame=setInterval(tick,200)
 }
 
 els.timerPreset.onclick=openTimerSettings
