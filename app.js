@@ -858,7 +858,7 @@ els.moves.onclick=e=>{
   const row=e.target.closest('.move-row')
   if(!row)return
   const m=moveFromElement(row)
-  if(m)chooseMove(m)
+  if(m)act({type:'play',placements:m.placements})
 }
 document.addEventListener('click',e=>{if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',()=>{persistHost();if(isOpenHost())closeRoomListing(room)})
