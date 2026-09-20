@@ -206,9 +206,12 @@ function paint(){
       }
       const probability=chance(result.hits[i],result)
       const avg=result.scores[i]/result.hits[i]
+      const strength=scoreStrength(avg)
       button.style.setProperty('--probability',probability.toFixed(3))
       button.style.setProperty('--diameter',`${18+66*Math.sqrt(probability)}%`)
-      button.style.setProperty('--strength',scoreStrength(avg).toFixed(3))
+      button.style.setProperty('--strength',strength.toFixed(3))
+      button.style.setProperty('--marker-opacity',(0.48+0.48*Math.sqrt(probability)).toFixed(3))
+      button.style.setProperty('--glow-size',`${2+8*strength}px`)
       button.setAttribute('aria-label',`${sideLabel(side)}, ${coord(i)}: ${percent(result.hits[i],result,exact)} likelihood; ${Math.round(avg)} point average when used`)
     }
   }
