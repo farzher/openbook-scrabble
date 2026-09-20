@@ -13,6 +13,20 @@ A browser-first two-player Scrabble variant where vocabulary recall is removed f
 - Game state is snapshot-based rather than delta-synchronized because Scrabble state is tiny and turn-based.
 - Host game state is saved locally after each accepted action so a refresh can recover the room.
 
+## Timers
+
+New rooms default to a **25:00 Standard** per-player countdown, with no setup required. The home timer tile can switch between Standard, Farzher, and no timer, and remembers the preference.
+
+**Farzher Timer** starts both players with equal time (5:00 by default) and an Expected Turn Time (ETT) equal to 10% of the current total time pool. When a turn takes `d` milliseconds with expected time `e`:
+
+1. the active player spends `d`;
+2. each opponent receives `d`;
+3. every clock receives the adjustment `d - e`.
+
+The ETT is recalculated from the settled pool after every turn, so fast play contracts the pool and slow play expands it. Standard clocks expire in real time; Farzher clocks settle when a valid turn is submitted because the turn-duration adjustment is part of the clock result.
+
+Timer state belongs to the host-authoritative game state and is included in reconnect snapshots, so refreshing does not reset a clock.
+
 ## Wordbook
 
 The initial build loads **ENABLE (Enhanced North American Benchmark Lexicon)** at runtime from the `dolph/dictionary` mirror. ENABLE contains roughly 172,800 words and was released into the public domain.
