@@ -10,7 +10,7 @@ function cloudField(values,size,resolution){
     for(let y=Math.max(0,Math.floor(cy-radius));y<Math.min(resolution,cy+radius);y++){
       for(let x=Math.max(0,Math.floor(cx-radius));x<Math.min(resolution,cx+radius);x++){
         const d=((x+.5-cx)**2+(y+.5-cy)**2)/(2*sigma*sigma)
-        const value=Math.min(50,ev)*Math.exp(-d),i=y*resolution+x
+        const value=Math.min(80,ev)*Math.exp(-d),i=y*resolution+x
         field[i]=Math.max(field[i],value)
       }
     }
@@ -21,9 +21,15 @@ function cloudField(values,size,resolution){
 // Independent, fixed-scale channels: neither side is normalized against the
 // other. Overlap becomes lavender, never subtraction or winner-takes-all.
 export function dualHeatColor(you,opponent){
-  const strength=v=>Math.pow(Math.max(0,Math.min(50,v))/50,.72)
-  const a=strength(you),b=strength(opponent)
-  return [16+25*a+190*b,25+105*a+45*b,39+175*a+40*b].map(Math.round)
+  const norm=v=>Math.max(0,Math.min(80,v))/80
+  const strength=v=>Math.pow(norm(v),.62)
+  const hot=v=>Math.pow(Math.max(0,(v-30)/50),1.15)
+  const a=strength(you),b=strength(opponent),ha=hot(you),hb=hot(opponent)
+  return [
+    Math.min(255,10+42*a+205*b+34*ha+54*hb),
+    Math.min(255,18+120*a+46*b+72*ha+70*hb),
+    Math.min(255,31+190*a+42*b+48*ha+28*hb)
+  ].map(Math.round)
 }
 export function dualCloudPixels(you,opponent,size=15,resolution=240){
   const yours=cloudField(you,size,resolution),theirs=cloudField(opponent,size,resolution)
