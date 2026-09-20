@@ -205,7 +205,7 @@ button:disabled{cursor:not-allowed}
 .section-kicker{font-size:10px;letter-spacing:.12em;color:#a9b8ac;font-weight:700;margin-bottom:7px}
 .moves-head{padding:2px 2px 15px;border-bottom:1px solid var(--line);align-items:end}
 .moves-head h2{font-size:23px;letter-spacing:-.045em;line-height:1.1}
-.move-count{padding-bottom:1px}.move-count strong{font-size:25px;color:#d8e6d9}.move-count span{font-size:9px;color:#8f9e96;letter-spacing:.08em}
+.move-count{padding-bottom:0}.move-count strong{font-size:23px;line-height:1.1;letter-spacing:-.045em;font-variant-numeric:tabular-nums;color:#d8e6d9}.move-count .section-kicker{display:block;font-size:10px;font-weight:700;color:#a9b8ac;letter-spacing:.12em;margin-bottom:7px}
 .moves-list{padding-top:7px;overscroll-behavior:contain}
 .move-row{height:57px;min-height:57px;padding:7px 8px 7px 10px;border:0;border-bottom:1px solid #ffffff09;border-radius:7px;grid-template-columns:minmax(0,1fr) 100px;position:relative;overflow:hidden;background:transparent;transition:background .11s,box-shadow .11s,filter .11s}
 .move-row:hover,.move-row:focus-visible{background:rgba(255,255,255,.025);filter:brightness(1.12);transform:none}
@@ -216,14 +216,21 @@ button:disabled{cursor:not-allowed}
 .move-copy{min-width:0;align-self:center}.move-word{font-size:16px;line-height:20px;letter-spacing:.025em;font-weight:750;color:#f0f1e9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .move-meta{font-size:11px;line-height:15px;color:#87978e;letter-spacing:.01em}
 .move-score{width:96px;height:34px;display:grid;grid-template-columns:58px 32px;gap:6px;align-items:center;justify-content:end;font-variant-numeric:tabular-nums;white-space:nowrap;background:transparent}.move-score small{justify-self:end;text-align:right;font:800 13px/1 'Manrope';letter-spacing:-.02em;color:var(--move-ev-text,#7f8792);transition:color .18s}.move-score strong{justify-self:end;width:32px;text-align:right;font:800 18px/1 'Manrope';color:#dce7df}.move-row:hover .move-score{background:transparent}.move-row.selected .move-score{box-shadow:none}
-.move-ev-progress{position:absolute;left:10px;right:8px;bottom:1px;height:2px;border-radius:999px;background:#ffffff08;overflow:hidden;pointer-events:none}
-.move-ev-progress i{display:block;width:var(--move-ev-progress,0%);height:100%;border-radius:inherit;background:var(--move-ev-progress-color,#b8c6bd99);transition:width .22s ease,background .18s ease}
-.move-row.ev-complete .move-ev-progress{opacity:.72}
-.move-row.ev-pending .move-ev-progress{background:repeating-linear-gradient(90deg,#ffffff0a 0 5px,transparent 5px 9px)}
+.move-ev-progress{position:absolute;left:10px;right:8px;bottom:1px;height:2px;border-radius:999px;background:#ffffff07;overflow:hidden;pointer-events:none;opacity:.88;transition:opacity 1.2s ease,background .6s ease}
+.move-ev-progress i{position:relative;display:block;width:var(--move-ev-progress,0%);height:100%;overflow:hidden;border-radius:inherit;background:var(--move-ev-progress-color,#b8c6bd99);box-shadow:0 0 7px var(--move-ev-progress-color,#b98cff66);transition:width .85s cubic-bezier(.22,1,.36,1),background .65s ease,box-shadow .65s ease}
+/* A soft highlight travels inside the measured fill, never replacing it.
+   Pause between stages instead of restarting the shimmer on every result. */
+.move-row.ev-ready .move-ev-progress i::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 15%,#ffffff12 36%,#ffffffa6 50%,#ffffff12 64%,transparent 85%);transform:translateX(-100%);opacity:0;animation:moveEvShimmer 2.8s cubic-bezier(.45,0,.25,1) infinite paused;transition:opacity .6s ease}
+.move-row.ev-ready.ev-running:not(.ev-complete) .move-ev-progress i::after{opacity:.85;animation-play-state:running}
+.move-row.ev-running .move-ev-progress{background:#ffffff0b;opacity:1}
+.move-row.ev-complete .move-ev-progress{opacity:.5;background:#ffffff04}
 .move-row.ev-pending .move-ev-progress i{width:0}
-.move-row.ev-running .move-ev-progress{background:#ffffff08}
-.move-row.ev-running .move-ev-progress i{width:11%;background:linear-gradient(90deg,transparent,#b98cffbb,transparent);animation:moveEvRunning 1.35s ease-in-out infinite}
-@keyframes moveEvRunning{from{transform:translateX(-140%)}to{transform:translateX(920%)}}
+/* First-estimate motion lives on a separate layer so the real fill can ease
+   smoothly from zero when the first sample arrives. */
+.move-ev-progress::after{content:'';position:absolute;left:0;top:0;width:32%;height:100%;border-radius:inherit;background:linear-gradient(90deg,transparent,#b98cff55,#dcc4ffcc,#b98cff55,transparent);opacity:0;transform:translateX(100%);transition:opacity .45s ease}
+.move-row.ev-pending.ev-running .move-ev-progress::after{opacity:1;animation:moveEvRunning 2.2s cubic-bezier(.45,0,.3,1) infinite}
+@keyframes moveEvRunning{0%{transform:translateX(-110%);opacity:0}18%{opacity:1}82%{opacity:1}100%{transform:translateX(325%);opacity:0}}
+@keyframes moveEvShimmer{0%,12%{transform:translateX(-100%)}85%,100%{transform:translateX(100%)}}
 .more-words{margin-top:8px;padding:12px;font-size:12px;color:#aebcb3;border-radius:9px}
 .moves-empty{font-size:14px;color:#a9b9ac;line-height:1.6;padding:40px 12px}.moves-empty b{display:block;font-size:16px;color:#dce6d8}.moves-empty p{font-size:13px;margin:9px 0}.empty-symbol{display:grid;place-items:center;margin:0 auto 18px;width:58px;height:58px;border:1px solid #a9c7b221;border-radius:19px;background:#a9c7b208;color:#bbd4bd;font-size:30px}
 .modal{background:#192420;border-color:#b5cbb721;border-radius:22px;padding:26px;animation:modal-in .18s ease-out}
@@ -275,6 +282,11 @@ button:disabled{cursor:not-allowed}
 }
 @media(min-width:900px) and (max-width:1199px){.table{grid-template-rows:28px auto minmax(0,1fr) auto}}
 @media(min-width:900px) and (max-height:560px){.game-shell{height:560px}}
-@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  /* Keep meaningful progress updates readable even when OS animations are
+     disabled. Only the fill eases; shimmer, sweeps and ambient motion stay off. */
+  .move-ev-progress i{transition:width .65s cubic-bezier(.22,1,.36,1),background-color .4s ease!important}
+}
 /* The same readable scale for the lobby. */
 .presence{font-size:12px}.lobby-empty{font-size:14px;color:#a4ada7}.identity-pill span{font-size:10px}.identity-pill input{font-size:14px}.lobby-who small{font-size:11px}.lobby-join{font-size:12px}.timer-preset span{font-size:10px}.resume-game small{font-size:10px}.resume-game b{font-size:14px}.join-row input{font-size:13px}

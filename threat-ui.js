@@ -19,16 +19,16 @@ panel?.append(tip)
 
 let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
 let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
-let bgWorkers=[],surveyQueue=[],refineQueue=[],priorityQueue=[],bgQueued=new Set(),bgDispatch=0,pendingPrefetch=null
+let bgWorkers=[],surveyQueue=[],refineQueue=[],priorityQueue=[],bgQueued=new Set(),visibleKeys=new Set(),pendingPrefetch=null
 const SIDES=['you','opponent']
 const MAX_SAMPLES=96
 const CACHE_LIMIT=512
 const SAMPLE_STAGES=[1,4,16,48,96]
 const CORES=navigator.hardwareConcurrency||4
 const PRIORITY_ROWS=10
-// Workers do not execute on the UI thread. Reserve two logical cores for the
-// browser/OS and use the rest, up to eight, for continuous EV refinement.
-const BG_WORKERS=CORES<=4?1:CORES<=8?2:CORES<=12?3:4
+// Reserve capacity for the UI and dedicated foreground analysis worker.
+// Each worker holds its own lexicon, so cap the pool to bound memory use.
+const BG_WORKERS=Math.max(1,Math.min(8,Math.floor(CORES)-2))
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
@@ -119,7 +119,7 @@ function handleForegroundResult(data,jobKey){
     updateStatus(entry)
   }
 
-  if(SIDES.every(side=>complete(entry.sides))){
+  if(SIDES.every(side=>complete(entry.sides[side]))){
     entry.done=true
     if(jobKey===key)board.classList.remove('heat-loading')
     return true
@@ -130,15 +130,15 @@ function nextSampleTarget(depth){
   return SAMPLE_STAGES.find(samples=>samples>depth)||0
 }
 function queueBackground(base,samples){
-  if(!samples||base.turnKey!==cacheTurn||foregroundBusy(base.key))return
+  if(!samples||base.turnKey!==cacheTurn||!visibleKeys.has(base.key)||foregroundBusy(base.key))return
   const token=`${base.key}@${samples}`
   if(bgQueued.has(token))return
   const job={...base,samples,token}
   bgQueued.add(token)
   const stage=SAMPLE_STAGES.indexOf(samples)
 
-  // The first screenful gets deeper estimates early, but the survey queue
-  // still advances so every rendered row receives an automatic estimate.
+  // Once every queued row has a rough estimate, prioritize deeper sampling
+  // for the top rows, then keep refining the rest.
   if(base.rank<PRIORITY_ROWS&&samples>1){
     job.priority=base.rank+stage*PRIORITY_ROWS
     priorityQueue.push(job)
@@ -171,7 +171,7 @@ function finishBackground(slot){
 function handleBackgroundResult(slot,data){
   if(!slot.busy||data.id!==slot.id)return
   slot.sides[data.side]=data
-  if(!SIDES.every(side=>complete(slot.sides)))return
+  if(!SIDES.every(side=>complete(slot.sides[side])))return
 
   const depth=sampleDepth(slot.sides)
   const current=cache.get(slot.key)
@@ -183,7 +183,7 @@ function handleBackgroundResult(slot,data){
     }
     touchCache(slot.key,entry)
     emitMoveEv(entry.moveKey,entry.revision,entry.sides)
-    queueNextBackground(slot.job,depth)
+    if(!SIDES.some(side=>slot.sides[side]?.error))queueNextBackground(slot.job,depth)
   }
   finishBackground(slot)
 }
@@ -216,11 +216,9 @@ function makeBackgroundWorker(words){
 }
 function takeBackgroundJob(){
   while(surveyQueue.length||priorityQueue.length||refineQueue.length){
-    let job
-    // Before every row has a rough value, alternate three breadth jobs with
-    // one top-row refinement. After that, refinement runs continuously.
-    if(surveyQueue.length&&bgDispatch++%4!==3)job=surveyQueue.shift()
-    else job=priorityQueue.shift()||refineQueue.shift()||surveyQueue.shift()
+    // Give every queued row a cheap first estimate before spending cycles
+    // on deeper sampling. Then refine the top rows and work down the list.
+    const job=surveyQueue.shift()||priorityQueue.shift()||refineQueue.shift()
 
     if(!job)continue
     if(job.turnKey!==cacheTurn){bgQueued.delete(job.token);continue}
@@ -357,7 +355,7 @@ function resetTurnCache(turnKey){
   priorityQueue=[]
   refineQueue=[]
   bgQueued.clear()
-  bgDispatch=0
+  visibleKeys.clear()
   cache.clear()
   jobs.clear()
   results={}
@@ -471,7 +469,8 @@ function analysisPayloads(state,selected,myId){
   return payloads
 }
 export function prefetchThreats(state,moves,myId){
-  if(!state||state.status!=='playing'||!moves?.length)return
+  if(!state||state.status!=='playing')return
+  moves=moves||[]
   if(!worker||!bgWorkers.length){
     pendingPrefetch={state,moves:[...moves],myId}
     return
@@ -479,6 +478,27 @@ export function prefetchThreats(state,moves,myId){
   resetTurnCache(`${myId}|${state.revision}`)
   const turnKey=cacheTurn
   const ranked=[...moves].sort((a,b)=>b.score-a.score)
+  visibleKeys=new Set(ranked.map(move=>analysisKey(state,move,myId)))
+
+  // Visibility is an authoritative snapshot, not an ever-growing prefetch
+  // list. Rebuild queued priorities and cancel off-screen jobs before pumping.
+  surveyQueue=[]
+  priorityQueue=[]
+  refineQueue=[]
+  bgQueued.clear()
+  for(const slot of bgWorkers){
+    if(!slot.busy)continue
+    if(visibleKeys.has(slot.key)){
+      bgQueued.add(slot.job.token)
+      continue
+    }
+    slot.worker?.postMessage({type:'cancel'})
+    slot.busy=false
+    slot.id=0
+    slot.key=''
+    slot.job=null
+    slot.sides={}
+  }
 
   ranked.forEach((move,rank)=>{
     const cacheKey=analysisKey(state,move,myId)
@@ -508,7 +528,8 @@ function startForegroundAnalysis(state,selected,myId){
   const seedSides=cached?.sides||{}
   const id=++request
   const entry={
-    id,sides:{...seedSides},done:false,updated:performance.now(),
+    id,sides:Object.fromEntries(SIDES.map(side=>[side,seedSides[side]
+      ?{...seedSides[side],done:false}:undefined])),done:false,updated:performance.now(),
     moveKey:selected?keyOfMove(selected):'',revision:state.revision,foreground:true
   }
   touchCache(key,entry)
@@ -529,6 +550,7 @@ export function updateThreats(state,selected,myId){
   if(phase)phase.textContent=selected?'after preview':''
 
   if(!state||state.status!=='playing'){
+    resetTurnCache('')
     key=''
     resultsKey=''
     results={}

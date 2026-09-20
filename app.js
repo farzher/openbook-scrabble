@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-bgfix3'
+import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-visible6'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -632,17 +632,19 @@ function bindMoveRows(){
   }
 }
 function prefetchVisibleMoveEvs(){
-  if(!state||!moveRows.size)return
+  if(!state)return
   const viewport=els.moves.getBoundingClientRect()
-  const buffer=Math.max(120,viewport.height*.65)
+  const top=Math.max(0,viewport.top),bottom=Math.min(window.innerHeight,viewport.bottom)
+  const left=Math.max(0,viewport.left),right=Math.min(window.innerWidth,viewport.right)
   const nearby=[]
   for(const [moveKey,row] of moveRows){
     const rect=row.getBoundingClientRect()
-    if(rect.bottom<viewport.top-buffer||rect.top>viewport.bottom+buffer)continue
+    if(!row.isConnected||bottom<=top||right<=left||rect.width<=0||rect.height<=0||
+      rect.bottom<=top||rect.top>=bottom||rect.right<=left||rect.left>=right)continue
     const move=moveByKey.get(moveKey)
     if(move)nearby.push(move)
   }
-  if(nearby.length)prefetchThreats(state,nearby,myId)
+  prefetchThreats(state,nearby,myId)
 }
 function scheduleVisibleMoveEvs(){
   if(evViewportFrame)return
@@ -670,6 +672,8 @@ document.addEventListener('openbook-move-ev-work',e=>{
 
 function renderMoves(){
   if(!state)return
+  moveRows.clear()
+  scheduleVisibleMoveEvs()
   const focusedKey=els.moves.contains(document.activeElement)?document.activeElement.dataset.key:null
   const myIndex=state.players.findIndex(p=>p.id===myId),myTurn=state.status==='playing'&&state.turn===myIndex
   if(!myTurn){
@@ -974,7 +978,11 @@ function moveFromElement(el){
   const moveKey=decodeURIComponent(raw)
   return moveByKey.get(moveKey)||null
 }
-els.moves.addEventListener('scroll',scheduleVisibleMoveEvs,{passive:true})
+// Capture ancestor/page scrolling too: the move list can leave the viewport
+// entirely on mobile. Resizing can also hide rows without a list scroll.
+window.addEventListener('scroll',scheduleVisibleMoveEvs,{passive:true,capture:true})
+window.addEventListener('resize',scheduleVisibleMoveEvs,{passive:true})
+if('ResizeObserver' in window)new ResizeObserver(scheduleVisibleMoveEvs).observe(els.moves)
 els.moves.addEventListener('pointerover',e=>{
   if(e.pointerType==='touch')return
   const row=e.target.closest('.move-row')
