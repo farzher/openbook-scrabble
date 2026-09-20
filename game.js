@@ -257,35 +257,11 @@ export function timerSnapshot(game,now=Date.now()){
     last:t.last
   }
 }
-function finishOnTime(game,loser){
-  game.status='finished'
-  game.winner=1-loser
-  game.history.push({type:'end',reason:'time',loser})
-}
-export function checkStandardTimeout(game,now=Date.now()){
-  const t=game.timer
-  if(!t||t.mode!=='standard'||game.status!=='playing') return false
-  const elapsed=rawTurnElapsed(game,now),active=game.turn
-  if(elapsed<t.clocks[active]) return false
-  t.clocks[active]=0
-  t.turnStartedAt=now
-  t.last={player:active,elapsedMs:elapsed}
-  game.revision++
-  finishOnTime(game,active)
-  return true
-}
 function settleTimerTurn(game,playerIndex,now=Date.now()){
   const t=game.timer
   if(!t||t.mode==='off') return {ok:true}
   const elapsed=Math.max(0,now-t.turnStartedAt)
   if(t.mode==='standard'){
-    if(elapsed>=t.clocks[playerIndex]){
-      t.clocks[playerIndex]=0
-      t.turnStartedAt=now
-      t.last={player:playerIndex,elapsedMs:elapsed}
-      finishOnTime(game,playerIndex)
-      return {ok:false,error:'Time expired.',timedOut:true}
-    }
     t.clocks[playerIndex]-=elapsed
     t.last={player:playerIndex,elapsedMs:elapsed}
     t.turnStartedAt=now
@@ -304,11 +280,6 @@ function settleTimerTurn(game,playerIndex,now=Date.now()){
   for(let i=0;i<t.clocks.length;i++) t.clocks[i]+=adjustment
   t.last={player:playerIndex,elapsedMs:elapsed,ettMs:ett,adjustmentMs:adjustment}
   t.turnStartedAt=now
-  if(t.clocks[playerIndex]<=0){
-    t.clocks[playerIndex]=0
-    finishOnTime(game,playerIndex)
-    return {ok:false,error:'Time expired.',timedOut:true}
-  }
   return {ok:true}
 }
 
