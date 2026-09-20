@@ -21,12 +21,10 @@
 .board-ev-title{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
 .board-ev-title>span{font:800 11px/1 'Manrope';color:#e4ece7}
 .board-ev-title>small{font-size:8px;color:#7f928c;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.board-ev-values{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;height:100%}
-.board-ev-values>i{font-style:normal;font-size:8px;color:#607078;text-transform:uppercase}
-.board-ev-player{display:flex;align-items:baseline;gap:6px;min-width:0}
-.board-ev-player span{font-size:9px;color:#91a3aa;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
-.board-ev-player strong{font:800 22px/1 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.035em}
-.board-ev-player.you strong{color:#72c3ff}.board-ev-player.opponent strong{color:#ff8f82}
+.board-ev-values{display:flex;align-items:baseline;justify-content:center;gap:11px;min-width:0;height:auto}
+.board-ev-values>strong{font:800 23px/1 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.board-ev-values>strong.you{color:#72c3ff}.board-ev-values>strong.opponent{color:#ff8f82}
+.board-ev-values>i{align-self:baseline;font-style:normal;font:700 8px/1 'DM Sans';color:#607078;text-transform:uppercase;transform:translateY(-1px)}
 .threat-panel.ev-stale .board-ev-values{opacity:.52}
 
 .heatmap-actions{display:flex;align-items:center;gap:7px;justify-self:end}
@@ -51,33 +49,28 @@
 /* Square EV inspector completely replaces the normal strip while hovering. */
 .heat-tooltip{
   position:absolute;inset:0;z-index:5;
-  display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);
-  align-items:center;gap:12px;
+  display:flex;align-items:baseline;justify-content:center;gap:12px;
   height:100%;padding:0 12px;
   border:0;background:#101b1f;color:#edf4ee;
   pointer-events:none
 }
 .heat-tooltip[hidden]{display:none}
-.heat-tip-square{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:48px}
+.heat-tip-square{position:absolute;left:12px;top:50%;transform:translateY(-50%)}
 .heat-tip-square>b{font:800 12px/1 'Manrope';color:#e7eeea}
-.heat-tip-square>span{font-size:8px;color:#71847c;white-space:nowrap}
-.heat-tip-player{display:flex;align-items:baseline;justify-content:center;gap:7px;min-width:0}
-.heat-tip-player>span{font-size:9px;color:#8fa19a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
-.heat-tip-player>strong{font:800 22px/1 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.035em;white-space:nowrap}
-.heat-tip-player.you>strong{color:#72c3ff}.heat-tip-player.opponent>strong{color:#ff8f82}
-.heat-tip-vs{font-style:normal;font-size:8px;color:#607078;text-transform:uppercase}
+.heat-tip-score{font:800 23px/1 'Manrope';font-variant-numeric:tabular-nums;letter-spacing:-.04em;white-space:nowrap}
+.heat-tip-score.you{color:#72c3ff}.heat-tip-score.opponent{color:#ff8f82}
+.heat-tip-vs{align-self:baseline;font-style:normal;font:700 8px/1 'DM Sans';color:#607078;text-transform:uppercase;transform:translateY(-1px)}
 
 @media(max-width:560px){
   .threat-panel{height:46px;min-height:46px;max-height:46px;grid-template-columns:auto 1fr auto;gap:8px;padding:0 9px}
   .board-ev-title>small{display:none}
-  .board-ev-values{gap:6px}
-  .board-ev-player span{display:none}
-  .board-ev-player strong{font-size:19px}
+  .board-ev-values{gap:8px}
+  .board-ev-values>strong{font-size:20px}
   .heat-toggle{width:31px;padding:0;justify-content:center}
   .heat-toggle span{display:none}
-  .heat-tooltip{grid-template-columns:auto 1fr auto 1fr;gap:7px;padding:0 9px}
-  .heat-tip-square{min-width:36px}.heat-tip-square>span{display:none}
-  .heat-tip-player>span{display:none}.heat-tip-player>strong{font-size:19px}
+  .heat-tooltip{gap:8px;padding:0 9px}
+  .heat-tip-square{left:9px}
+  .heat-tip-score{font-size:20px}
 }
 
 /* Rail: secondary data is opt-in, history owns the remaining space. */
