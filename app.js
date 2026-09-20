@@ -586,6 +586,9 @@ function applyMoveEvRow(moveKey){
     row.style.removeProperty('--move-ev-bg')
     row.style.removeProperty('--move-ev-edge')
     row.style.removeProperty('--move-ev-progress-color')
+    row.style.removeProperty('--move-ev-text')
+    const evLabel=row.querySelector('[data-move-ev]')
+    if(evLabel)evLabel.textContent='EV…'
     row.title='EV queued'
     return
   }
@@ -613,6 +616,12 @@ function applyMoveEvRow(moveKey){
   row.style.setProperty('--move-ev-bg',`linear-gradient(90deg,rgba(${r},${g},${b},${alpha}),rgba(${r},${g},${b},${alpha*.18}) 70%,transparent)`)
   row.style.setProperty('--move-ev-edge',`rgba(${r},${g},${b},${edge})`)
   row.style.setProperty('--move-ev-progress-color',`rgba(${r},${g},${b},${progressAlpha})`)
+  row.style.setProperty('--move-ev-text',`rgb(${r} ${g} ${b})`)
+  const evLabel=row.querySelector('[data-move-ev]')
+  if(evLabel){
+    const value=Math.abs(diff)<.05?'0.0':`${diff>0?'+':'−'}${Math.abs(diff).toFixed(1)}`
+    evLabel.textContent=`EV${value}`
+  }
   row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)} · ${ev.done?'refined':ev.samples+' / 96 samples'}`
 }
 function bindMoveRows(){
@@ -666,7 +675,7 @@ function renderMoves(){
         <div class="move-word">${m.word}</div>
         <div class="move-meta">${coord(m)}${m.placements.length===7?' · BINGO':''}</div>
       </div>
-      <div class="move-score">${m.score}</div>
+      <div class="move-score"><strong>${m.score}</strong><small data-move-ev>EV…</small></div>
       <span class="move-ev-progress" aria-hidden="true"><i></i></span>
     </button>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
