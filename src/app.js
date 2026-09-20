@@ -5,7 +5,7 @@ const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/
 const $=s=>document.querySelector(s)
 const els={landing:$('#landing'),game:$('#game'),name:$('#nameInput'),roomInput:$('#roomInput'),create:$('#createBtn'),join:$('#joinBtn'),board:$('#board'),rack:$('#rack'),players:$('#players'),bagCount:$('#bagCount'),bagMeter:$('#bagMeter'),history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),summary:$('#wordSummary'),search:$('#moveSearch'),sort:$('#moveSort'),turn:$('#turnBanner'),connection:$('#connection'),roomCode:$('#roomCode'),copy:$('#copyRoomBtn'),play:$('#playBtn'),playScore:$('#playScore'),pass:$('#passBtn'),exchange:$('#exchangeBtn'),modalLayer:$('#modalLayer'),modal:$('#modal'),toast:$('#toast'),rules:$('#rulesBtn'),home:$('#homeBtn'),rackHint:$('#rackHint')}
 
-let lex=null, lobby=null, room='', myId='', role='', hostGame=null, state=null, moves=[], selected=null, expandedWord='', selectedExchange=new Set(), computing=0
+let lex=null, lobby=null, room='', myId='', role='', hostGame=null, state=null, moves=[], selected=null, expandedWord='', visibleWords=250, selectedExchange=new Set(), computing=0
 const uid=()=>{const a=new Uint8Array(9);crypto.getRandomValues(a);return [...a].map(x=>x.toString(36)).join('').slice(0,12)}
 const makeRoom=()=>{const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',a=new Uint8Array(6);crypto.getRandomValues(a);return [...a].map(x=>chars[x%chars.length]).join('')}
 const cleanName=s=>(s||'Player').trim().slice(0,18)||'Player'
@@ -99,7 +99,7 @@ function act(action){
 function setState(next){
   if(!next||next.you!==myId)return
   const changed=!state||next.revision!==state.revision
-  state=next;selected=null;expandedWord='';els.playScore.textContent='';render()
+  state=next;selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';render()
   if(changed)computeMoves()
 }
 
@@ -156,13 +156,14 @@ function renderMoves(){
   if(sort==='word')list.sort((a,b)=>a.word.localeCompare(b.word));else if(sort==='length')list.sort((a,b)=>b.word.length-a.word.length||b.best-a.best);else list.sort((a,b)=>b.best-a.best||a.word.localeCompare(b.word))
   const unique=new Set(moves.map(m=>m.word)).size;els.moveCount.textContent=moves.length;els.summary.textContent=`${unique} playable words · ${moves.length} placements`
   if(!list.length){els.moves.innerHTML=`<div class="moves-empty">${moves.length?'No plays match your search.':'No legal play found. You can exchange or pass.'}</div>`;return}
-  els.moves.innerHTML=list.map(g=>{
+  const shown=list.slice(0,visibleWords)
+  els.moves.innerHTML=shown.map(g=>{
     const open=expandedWord===g.word
     const head=`<button class="move-row word-row ${open?'selected':''}" data-word="${g.word}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} placement${g.placements.length===1?'':'s'}${g.word.length===7?' · 7 letters':''}</div></div><div class="move-score">${g.best}</div></button>`
     if(!open)return head
     const placements=[...g.placements].sort((a,b)=>b.score-a.score||coord(a).localeCompare(coord(b)))
     return head+`<div class="placement-list">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)} · ${m.placements.length} tile${m.placements.length===1?'':'s'}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`
-  }).join('')
+  }).join('')+(shown.length<list.length?`<button class="more-words" data-more>Show ${Math.min(250,list.length-shown.length)} more <span>${list.length-shown.length} remaining</span></button>`:'')
 }
 function coord(m){const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0];return `${String.fromCharCode(65+p.c)}${p.r+1}${m.direction==='V'?' ↓':' →'}`}
 function chooseMove(m){selected=m;els.play.disabled=false;els.playScore.textContent=`+${m.score}`;renderBoard();renderMoves();els.rackHint.textContent=`${m.word} · ${m.score} points`}
@@ -206,7 +207,7 @@ els.copy.onclick=()=>navigator.clipboard.writeText(`${location.origin}${location
 els.home.onclick=()=>{if(confirm('Leave this game?'))goHome()};els.pass.onclick=()=>openModal(`<h2>Pass this turn?</h2><p>You will score 0 points and keep your rack.</p><div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="confirmPass">Pass</button></div>`)
 els.exchange.onclick=()=>{if(state?.bagCount<7){toast('Fewer than 7 tiles remain.');return}showExchange()};els.play.onclick=()=>{if(selected)act({type:'play',placements:selected.placements})};els.rules.onclick=showRules
 els.modalLayer.onclick=e=>{if(e.target===els.modalLayer||e.target.closest('[data-close]'))closeModal()}
-els.search.oninput=renderMoves;els.sort.onchange=renderMoves;els.moves.onclick=e=>{const placement=e.target.closest('.placement-row');if(placement){const key=decodeURIComponent(placement.dataset.key);const m=moves.find(x=>keyOfMove(x)===key);if(m)chooseMove(m);return}const row=e.target.closest('.word-row');if(!row)return;expandedWord=expandedWord===row.dataset.word?'':row.dataset.word;renderMoves();if(expandedWord){const options=moves.filter(m=>m.word===expandedWord).sort((a,b)=>b.score-a.score);if(options[0])chooseMove(options[0])}}
+els.search.oninput=()=>{visibleWords=250;renderMoves()};els.sort.onchange=()=>{visibleWords=250;renderMoves()};els.moves.onclick=e=>{if(e.target.closest('[data-more]')){visibleWords+=250;renderMoves();return}const placement=e.target.closest('.placement-row');if(placement){const key=decodeURIComponent(placement.dataset.key);const m=moves.find(x=>keyOfMove(x)===key);if(m)chooseMove(m);return}const row=e.target.closest('.word-row');if(!row)return;expandedWord=expandedWord===row.dataset.word?'':row.dataset.word;renderMoves();if(expandedWord){const options=moves.filter(m=>m.word===expandedWord).sort((a,b)=>b.score-a.score);if(options[0])chooseMove(options[0])}}
 document.addEventListener('click',e=>{if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',persistHost)
 
