@@ -518,7 +518,8 @@ function updateClocks(){
   }
   const clocks=projectedClocks()
   const mode=t.mode==='farzher'?'F':''
-  els.clockStrip.innerHTML=state.players.map((p,i)=>`<div class="game-clock ${t.active===i&&state.status==='playing'?'active':''} ${clocks[i]<=30_000?'low':''}"><span>${p.id===myId?'YOU':escapeHtml(p.name)}</span><b>${formatClock(clocks[i])}</b>${mode?'<i>F</i>':''}</div>`).join('<em>·</em>')
+  const divider=t.mode==='farzher'? `<em class="ett-clock" title="Expected turn time">ETT ${formatClock(t.ettMs||0)}</em>` : '<em>·</em>'
+  els.clockStrip.innerHTML=state.players.map((p,i)=>`<div class="game-clock ${t.active===i&&state.status==='playing'?'active':''} ${clocks[i]<=30_000?'low':''}"><span>${p.id===myId?'YOU':escapeHtml(p.name)}</span><b>${formatClock(clocks[i])}</b>${mode?'<i>F</i>':''}</div>`).join(divider)
   document.querySelectorAll('[data-side-clock]').forEach(x=>{const i=+x.dataset.sideClock;x.textContent=formatClock(clocks[i]);x.classList.toggle('low',clocks[i]<=30_000)})
 }
 function startClockRendering(){
