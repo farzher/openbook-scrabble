@@ -684,6 +684,7 @@ function startClockRendering(){
   if(state?.timer&&state.status==='playing')timerFrame=setInterval(tick,200)
 }
 
+els.players.onclick=e=>{if(e.target.closest('[data-rename]'))showRename()}
 els.statsBtn.onclick=showStats
 els.timerPreset.onclick=openTimerSettings
 els.create.onclick=create
@@ -727,6 +728,8 @@ if(!initialName){initialName=funnyName();saveName(initialName)}
 els.name.value=initialName
 renderTimerPreset();connectDirectory()
 const params=new URLSearchParams(location.search),invite=params.get('room')?.toUpperCase()
-if(invite){els.roomInput.value=invite}
-if('requestIdleCallback'in window)requestIdleCallback(()=>loadLexicon(true).catch(()=>{}))
+if(invite){
+  els.roomInput.value=invite
+  join(invite)
+}else if('requestIdleCallback'in window)requestIdleCallback(()=>loadLexicon(true).catch(()=>{}))
 else setTimeout(()=>loadLexicon(true).catch(()=>{}),800)
