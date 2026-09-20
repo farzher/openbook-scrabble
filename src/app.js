@@ -44,7 +44,11 @@ function persistIdentity(){localStorage.setItem(`openbook-player-${room}`,JSON.s
 function send(msg){lobby?.send(msg)}
 function sendState(targetId=null){
   if(!hostGame)return
-  for(const p of hostGame.players){if(targetId&&p.id!==targetId)continue;send({t:'state',to:p.id,state:publicState(hostGame,p.id)})}
+  for(const p of hostGame.players){
+    if(targetId&&p.id!==targetId)continue
+    if(p.id===myId)continue // Never put the host's private rack on the wire.
+    send({t:'state',to:p.id,state:publicState(hostGame,p.id)})
+  }
 }
 
 function connectLobby(){
@@ -95,7 +99,7 @@ function act(action){
 function setState(next){
   if(!next||next.you!==myId)return
   const changed=!state||next.revision!==state.revision
-  state=next;selected=null;expandedWord='';render()
+  state=next;selected=null;expandedWord='';els.playScore.textContent='';render()
   if(changed)computeMoves()
 }
 
@@ -177,10 +181,25 @@ function create(){
   loadLexicon().then(()=>{const n=cleanName(els.name.value);saveName(n);room=makeRoom();role='host';myId=uid();hostGame=null;persistIdentity();showGame();connectLobby();render()})
 }
 function join(){
-  loadLexicon().then(()=>{const code=els.roomInput.value.trim().toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);if(!code){toast('Enter a room code.');return}const n=cleanName(els.name.value);saveName(n);room=code;const saved=parse(localStorage.getItem(`openbook-player-${room}`));role=saved?.role==='host'&&localStorage.getItem(`openbook-host-${room}`)?'host':'guest';myId=saved?.myId||uid();if(role==='host'){const h=parse(localStorage.getItem(`openbook-host-${room}`));hostGame=h?.game||null}persistIdentity();showGame();connectLobby();render();if(role==='guest')setTimeout(()=>send({t:'join',name:n,id:myId}),250)})
+  loadLexicon().then(()=>{
+    const code=els.roomInput.value.trim().toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8)
+    if(!code){toast('Enter a room code.');return}
+    const n=cleanName(els.name.value);saveName(n);room=code
+    const saved=parse(localStorage.getItem(`openbook-player-${room}`))
+    role=saved?.role==='host'&&localStorage.getItem(`openbook-host-${room}`)?'host':'guest'
+    myId=saved?.myId||uid()
+    if(role==='host'){
+      const h=parse(localStorage.getItem(`openbook-host-${room}`))
+      hostGame=h?.game||null
+    }
+    persistIdentity();showGame();connectLobby()
+    if(role==='host'&&hostGame)setState(publicState(hostGame,myId))
+    else render()
+    if(role==='guest')setTimeout(()=>send({t:'join',name:n,id:myId}),250)
+  })
 }
 function parse(s){try{return JSON.parse(s)}catch{return null}}
-function goHome(){lobby?.close();lobby=null;state=null;hostGame=null;moves=[];selected=null;delete document.body.dataset.finished;els.game.classList.add('hidden');els.landing.classList.remove('hidden');history.replaceState(null,'',location.pathname);closeModal()}
+function goHome(){lobby?.close();lobby=null;state=null;hostGame=null;moves=[];selected=null;expandedWord='';els.playScore.textContent='';delete document.body.dataset.finished;els.game.classList.add('hidden');els.landing.classList.remove('hidden');history.replaceState(null,'',location.pathname);closeModal()}
 
 els.create.onclick=create;els.join.onclick=join;els.roomInput.onkeydown=e=>{if(e.key==='Enter')join()};els.roomInput.oninput=()=>els.roomInput.value=els.roomInput.value.toUpperCase().replace(/[^A-Z2-9]/g,'')
 els.copy.onclick=()=>navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${room}`).then(()=>toast('Invite link copied'))
