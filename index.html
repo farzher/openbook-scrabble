@@ -8,7 +8,7 @@
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./polish.css">
-  <link rel="stylesheet" href="./threats.css?v=cloud2">
+  <link rel="stylesheet" href="./threats.css?v=ev-cache1">
 </head>
 <body>
 <div id="app">
@@ -53,7 +53,7 @@
       <button class="wordmark" id="homeBtn"><span class="mini-mark">OS</span><span>Openbook <b>Scrabble</b></span></button>
       <div class="clock-strip" id="clockStrip"></div>
       <div class="top-actions">
-        <button class="sound-button" id="soundBtn" title="Enable sounds" aria-label="Enable sounds" aria-pressed="false">♪<span>Sound off</span></button>
+        <button class="sound-button" id="soundBtn" title="Mute sounds" aria-label="Mute sounds" aria-pressed="true">♪<span>Sound on</span></button>
         <button class="rules-link" id="rulesBtn">How to play</button>
         <button class="stats-button" id="statsBtn" title="Game statistics" aria-label="Game statistics">▦</button>
         <div class="connection" id="connection" title="Connecting"><i></i><span>Connecting</span></div>
@@ -92,23 +92,20 @@
         <div class="compact-scores" id="compactScores" aria-label="Scores"></div>
         <div class="board-wrap"><div class="board-frame"><div class="board-columns" aria-hidden="true"> <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span><span>K</span><span>L</span><span>M</span><span>N</span><span>O</span></div><div class="board-rows" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span></div><div class="board" id="board" aria-label="Scrabble board"></div></div></div>
         <div class="rack-zone">
-        <section id="threatPanel" class="threat-panel hidden" aria-label="Future move forecast">
-          <div class="forecast-label">
-            <span>EV heatmap</span>
-            <b id="threatPhase">Current board</b>
+        <section id="threatPanel" class="threat-panel hidden" aria-label="Board expected value">
+          <div class="board-ev-title" title="Expected score of the best available move across possible racks">
+            <span>Board EV</span><small id="threatPhase"></small>
           </div>
-          <div class="heat-views">
-            <button type="button" id="heatToggle" aria-pressed="true" aria-label="Show both players’ EV heatmap">Heatmap on</button>
+          <div class="board-ev-values">
+            <div class="board-ev-player you"><span>You</span><strong id="boardEvYou">—</strong></div>
+            <i>vs</i>
+            <div class="board-ev-player opponent"><span id="boardEvOpponentLabel">Opponent</span><strong id="boardEvOpponent">—</strong></div>
           </div>
-          <div class="forecast-legend dual-legend" aria-label="Blue: you. Red: opponent. Purple: both. Brighter means higher EV on a shared 0–50+ point scale. Cloud edges are smoothed.">
-            <span class="legend-you"><i></i>You</span>
-            <span class="legend-opponent"><i></i>Opponent</span>
-            <span class="legend-both"><i></i>Both</span>
-            <small>brighter = higher EV</small>
+          <div class="heatmap-actions">
+            <button type="button" id="heatToggle" class="heat-toggle" aria-pressed="true" title="Hide EV heatmap" aria-label="Toggle EV heatmap"><span>Heatmap</span><i></i></button>
+            <span id="threatStatus" role="status" aria-live="polite"></span>
           </div>
-          <span id="threatStatus" role="status">Sampling</span>
         </section>
-          <div class="board-legend" aria-label="Board bonuses"><span><i class="tw"></i>3× word</span><span><i class="dw"></i>2× word</span><span><i class="tl"></i>3× letter</span><span><i class="dl"></i>2× letter</span></div>
           <div class="rack-label"><span>Your rack</span><small id="rackHint"></small></div>
           <div class="rack" id="rack"></div>
           <div class="preview-bar" id="previewBar" role="status"><span id="previewText">Click a square or choose a word to preview</span><button id="clearPreview" class="hidden" aria-label="Clear preview" title="Clear preview (Escape)">×</button></div>
