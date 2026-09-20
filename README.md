@@ -15,7 +15,7 @@ A browser-first two-player Scrabble variant where vocabulary recall is removed f
 
 ## Timers
 
-New rooms default to a **25:00 Standard** per-player countdown, with no setup required. The home timer tile can switch between Standard, Farzher, and no timer, and remembers the preference.
+New rooms default to the **Farzher Timer at 5:00/player with a 10% ETT**, with no setup required. The home timer tile can switch between Farzher, Standard, and no timer, and remembers the preference.
 
 **Farzher Timer** starts both players with equal time (5:00 by default) and an Expected Turn Time (ETT) equal to 10% of the current total time pool. When a turn takes `d` milliseconds with expected time `e`:
 
