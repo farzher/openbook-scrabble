@@ -221,18 +221,106 @@ export function applyMove(board,placements){
   return next
 }
 
-export function createGame(hostId,hostName,guestId,guestName){
+export const DEFAULT_TIMER = Object.freeze({mode:'standard',initialMs:25*60_000,ettRate:.10})
+
+export function normalizeTimerConfig(config={}){
+  const mode=['standard','farzher','off'].includes(config.mode)?config.mode:'standard'
+  const fallback=mode==='farzher'?5*60_000:25*60_000
+  const initialMs=Math.max(30_000,Math.min(60*60_000,Number(config.initialMs)||fallback))
+  const ettRate=Math.max(.01,Math.min(.5,Number(config.ettRate)||.10))
+  return {mode,initialMs,ettRate}
+}
+function createTimer(config){
+  const c=normalizeTimerConfig(config)
+  if(c.mode==='off') return {mode:'off'}
+  return {mode:c.mode,initialMs:c.initialMs,ettRate:c.ettRate,clocks:[c.initialMs,c.initialMs],turnStartedAt:Date.now(),last:null}
+}
+function rawTurnElapsed(game,now=Date.now()){
+  return game.timer&&game.timer.mode!=='off'&&game.status==='playing'?Math.max(0,now-game.timer.turnStartedAt):0
+}
+export function timerSnapshot(game,now=Date.now()){
+  const t=game.timer
+  if(!t||t.mode==='off') return t?{mode:'off'}:null
+  const clocks=[...t.clocks],elapsed=rawTurnElapsed(game,now)
+  if(game.status==='playing'&&elapsed){
+    clocks[game.turn]-=elapsed
+    if(t.mode==='farzher') for(let i=0;i<clocks.length;i++) if(i!==game.turn) clocks[i]+=elapsed
+  }
+  const pool=t.mode==='farzher'?t.clocks.reduce((a,b)=>a+b,0):null
+  return {
+    mode:t.mode,initialMs:t.initialMs,ettRate:t.ettRate,clocks,
+    active:game.status==='playing'?game.turn:-1,
+    ettMs:pool===null?null:Math.max(0,pool*t.ettRate),
+    last:t.last
+  }
+}
+function finishOnTime(game,loser){
+  game.status='finished'
+  game.winner=1-loser
+  game.history.push({type:'end',reason:'time',loser})
+}
+export function checkStandardTimeout(game,now=Date.now()){
+  const t=game.timer
+  if(!t||t.mode!=='standard'||game.status!=='playing') return false
+  const elapsed=rawTurnElapsed(game,now),active=game.turn
+  if(elapsed<t.clocks[active]) return false
+  t.clocks[active]=0
+  t.turnStartedAt=now
+  t.last={player:active,elapsedMs:elapsed}
+  game.revision++
+  finishOnTime(game,active)
+  return true
+}
+function settleTimerTurn(game,playerIndex,now=Date.now()){
+  const t=game.timer
+  if(!t||t.mode==='off') return {ok:true}
+  const elapsed=Math.max(0,now-t.turnStartedAt)
+  if(t.mode==='standard'){
+    if(elapsed>=t.clocks[playerIndex]){
+      t.clocks[playerIndex]=0
+      t.turnStartedAt=now
+      t.last={player:playerIndex,elapsedMs:elapsed}
+      finishOnTime(game,playerIndex)
+      return {ok:false,error:'Time expired.',timedOut:true}
+    }
+    t.clocks[playerIndex]-=elapsed
+    t.last={player:playerIndex,elapsedMs:elapsed}
+    t.turnStartedAt=now
+    return {ok:true}
+  }
+
+  // Farzher Timer:
+  // 1) transfer spent time to every opponent
+  // 2) ETT is a percentage of the turn-start pool
+  // 3) add (spent - ETT) to every clock
+  const pool=t.clocks.reduce((a,b)=>a+b,0)
+  const ett=Math.max(0,pool*t.ettRate)
+  t.clocks[playerIndex]-=elapsed
+  for(let i=0;i<t.clocks.length;i++) if(i!==playerIndex)t.clocks[i]+=elapsed
+  const adjustment=elapsed-ett
+  for(let i=0;i<t.clocks.length;i++) t.clocks[i]+=adjustment
+  t.last={player:playerIndex,elapsedMs:elapsed,ettMs:ett,adjustmentMs:adjustment}
+  t.turnStartedAt=now
+  if(t.clocks[playerIndex]<=0){
+    t.clocks[playerIndex]=0
+    finishOnTime(game,playerIndex)
+    return {ok:false,error:'Time expired.',timedOut:true}
+  }
+  return {ok:true}
+}
+
+export function createGame(hostId,hostName,guestId,guestName,{timer=DEFAULT_TIMER}={}){
   const bag=makeBag(), players=[
     {id:hostId,name:hostName||'Host',score:0,rack:draw(bag,7)},
     {id:guestId,name:guestName||'Guest',score:0,rack:draw(bag,7)}
   ]
-  return {version:1,revision:1,status:'playing',board:emptyBoard(),bag,players,turn:0,history:[],scoreless:0,lastPlay:[]}
+  return {version:1,revision:1,status:'playing',board:emptyBoard(),bag,players,turn:0,history:[],scoreless:0,lastPlay:[],timer:createTimer(timer)}
 }
 
 export function publicState(game,viewerId){
   return {
     version:game.version,revision:game.revision,status:game.status,board:game.board,
-    bagCount:game.bag.length,turn:game.turn,history:game.history,lastPlay:game.lastPlay,
+    bagCount:game.bag.length,turn:game.turn,history:game.history,lastPlay:game.lastPlay,timer:timerSnapshot(game),
     players:game.players.map(p=>({id:p.id,name:p.name,score:p.score,rackCount:p.rack.length,rack:p.id===viewerId?p.rack:undefined})),
     you:viewerId
   }
@@ -244,14 +332,21 @@ export function processAction(game,playerId,action,lex){
   if(pi<0||pi!==game.turn) return {ok:false,error:'It is not your turn.'}
   if(action.revision!==game.revision) return {ok:false,error:'Your board was out of date. Synced to the latest turn.'}
   const player=game.players[pi]
+
+  // Validate the action before charging the turn where possible.
   if(action.type==='play'){
     if(!validateRackUse(player.rack,action.placements)) return {ok:false,error:'Those tiles are not in your rack.'}
     const ev=evaluatePlacements(game.board,action.placements,lex); if(!ev.ok) return ev
+    const timed=settleTimerTurn(game,pi)
+    if(!timed.ok){ game.revision++; return {...timed,changed:true} }
+
     game.board=applyMove(game.board,action.placements); player.rack=removeRackTiles(player.rack,action.placements)
     player.score+=ev.score; player.rack.push(...draw(game.bag,7-player.rack.length)); game.scoreless=ev.score?0:game.scoreless+1
     game.lastPlay=action.placements.map(p=>[p.r,p.c])
     game.history.push({player:pi,type:'play',word:ev.word,words:ev.words.map(w=>w.word),score:ev.score})
   } else if(action.type==='pass'){
+    const timed=settleTimerTurn(game,pi)
+    if(!timed.ok){ game.revision++; return {...timed,changed:true} }
     game.scoreless++; game.lastPlay=[]; game.history.push({player:pi,type:'pass',score:0})
   } else if(action.type==='exchange'){
     const tiles=Array.isArray(action.tiles)?action.tiles:[]
@@ -259,6 +354,8 @@ export function processAction(game,playerId,action,lex){
     if(game.bag.length<7) return {ok:false,error:'You can only exchange while at least 7 tiles remain in the bag.'}
     const temp=[...player.rack]
     for(const t of tiles){const i=temp.indexOf(t);if(i<0)return {ok:false,error:'Those tiles are not in your rack.'};temp.splice(i,1)}
+    const timed=settleTimerTurn(game,pi)
+    if(!timed.ok){ game.revision++; return {...timed,changed:true} }
     const fresh=draw(game.bag,tiles.length); game.bag.push(...tiles);shuffle(game.bag);player.rack=temp.concat(fresh)
     game.scoreless++;game.lastPlay=[];game.history.push({player:pi,type:'exchange',count:tiles.length,score:0})
   } else return {ok:false,error:'Unknown action.'}
