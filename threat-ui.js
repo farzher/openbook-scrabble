@@ -505,6 +505,7 @@ export function updateThreats(state,selected,myId){
       updateStatus(cached)
       return
     }
+    updateStatus(cached)
     startForegroundAnalysis(state,selected,myId)
     return
   }
