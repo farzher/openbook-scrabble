@@ -170,7 +170,7 @@ function handleBackgroundResult(slot,data){
 function makeBackgroundWorker(words){
   const slot={worker:null,busy:false,id:0,key:'',job:null,sides:{}}
   try{
-    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-progressive1',import.meta.url),{type:'module'})
+    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-progress3',import.meta.url),{type:'module'})
     slot.worker.onmessage=({data})=>handleBackgroundResult(slot,data)
     slot.worker.onerror=event=>{
       console.error('Background EV worker failed',event)
@@ -245,7 +245,7 @@ export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-progressive1',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-progress3',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       const jobKey=jobs.get(data.id)
       if(!jobKey)return
