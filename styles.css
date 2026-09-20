@@ -66,11 +66,15 @@ button{color:inherit;border:0;cursor:pointer}
 .lobby-join{display:flex;align-items:center;gap:9px;font-size:10px;color:#77736b;font-weight:800}
 .lobby-join b{font-size:17px;color:var(--ink)}
 
-.create-game{width:100%;height:62px;border-radius:16px;background:var(--accent);box-shadow:0 5px 0 #b73824;display:grid;grid-template-columns:34px 1fr 34px;align-items:center;padding:0 14px;text-align:left}
+.create-row{display:grid;grid-template-columns:1fr 108px;gap:9px}.create-game{width:100%;height:62px;border-radius:16px;background:var(--accent);box-shadow:0 5px 0 #b73824;display:grid;grid-template-columns:34px 1fr 34px;align-items:center;padding:0 14px;text-align:left}
 .create-game:hover{background:#ff4c2c;box-shadow:0 7px 0 #b73824}
 .create-game .plus{width:31px;height:31px;border-radius:9px;background:#ffffff1c;display:grid;place-items:center;font-size:24px;font-weight:500}
 .create-game b{font:800 16px 'Manrope';padding-left:4px}
 .create-game .arrow{justify-self:end;font-size:23px}
+.timer-preset{height:62px;border:1px solid var(--line);border-radius:16px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 13px;box-shadow:0 5px 0 #ddd5c7;transition:.15s transform,.15s border-color}
+.timer-preset:hover{transform:translateY(-1px);border-color:#bbb2a2}
+.timer-preset span{font-size:8px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);font-weight:800}
+.timer-preset b{font:800 17px 'Manrope';letter-spacing:-.03em;margin-top:2px}
 .join-row{display:grid;grid-template-columns:1fr 88px;gap:8px;margin-top:11px}
 .join-row input{height:48px;border:1px solid var(--line);background:#f4f1e9;border-radius:13px;padding:0 14px;font-size:11px;font-weight:800;letter-spacing:.13em;color:var(--ink);outline:0;text-transform:uppercase}
 .join-row input:focus{border-color:#aaa397;background:#fff}
@@ -80,9 +84,9 @@ button{color:inherit;border:0;cursor:pointer}
 .game{min-height:100vh;background:#ece9e2}
 .topbar{height:66px;padding:0 22px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:1px solid var(--line);background:#faf8f3e8;backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}
 .wordmark{background:none;display:flex;align-items:center;gap:10px;font-size:14px}
-.connection{display:flex;gap:7px;align-items:center;font-size:10px;color:var(--muted);font-weight:700}
-.connection i{width:7px;height:7px;border-radius:50%;background:#c5a443}.connection.online i{background:#55a46c}
-.room-pill{justify-self:end;background:#fff;border:1px solid var(--line);padding:7px 11px;border-radius:11px;display:flex;align-items:center;gap:8px}
+.clock-strip{display:flex;align-items:center;justify-content:center;gap:8px;min-width:220px}.clock-strip>em{font-style:normal;color:#c2bcb1;font-size:11px}.game-clock{height:39px;min-width:92px;padding:5px 10px 4px;border:1px solid transparent;border-radius:11px;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;column-gap:6px;align-items:center;transition:.18s background,.18s border-color}.game-clock span{grid-column:1;font-size:7px;line-height:1;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);font-weight:800}.game-clock b{grid-column:1;font:800 16px/1.05 'Manrope';letter-spacing:-.035em}.game-clock i{grid-column:2;grid-row:1/3;align-self:center;font-style:normal;width:18px;height:18px;border-radius:6px;display:grid;place-items:center;background:#262930;color:#fff;font:800 8px 'Manrope'}.game-clock.active{background:#fff;border-color:#d8d0c2}.game-clock.active b{color:var(--accent-dark)}.game-clock.low b{color:#c42d28}
+.top-actions{justify-self:end;display:flex;align-items:center;gap:9px}.connection{display:grid;place-items:center;width:18px;height:18px}.connection i{width:7px;height:7px;border-radius:50%;background:#c5a443}.connection.online i{background:#55a46c}
+.room-pill{background:#fff;border:1px solid var(--line);padding:7px 11px;border-radius:11px;display:flex;align-items:center;gap:8px}
 .room-pill span{font-size:8px;letter-spacing:.12em;color:var(--muted);font-weight:800}.room-pill b{letter-spacing:.11em;font-size:11px}.room-pill i{font-style:normal;color:var(--muted)}
 
 .game-shell{height:calc(100vh - 66px);display:grid;grid-template-columns:218px minmax(560px,1fr) 324px;max-width:1720px;margin:auto}
@@ -92,7 +96,7 @@ button{color:inherit;border:0;cursor:pointer}
 .player-card{padding:12px;border:1px solid var(--line);border-radius:13px;background:#fff;display:grid;grid-template-columns:1fr auto;align-items:center}
 .player-card.active{border-color:#b9ad98;box-shadow:inset 3px 0 var(--accent)}
 .player-card small{color:var(--muted);display:block;font-size:9px;margin-top:1px}
-.player-card strong{font:800 27px 'Manrope';letter-spacing:-.06em}
+.player-values{text-align:right}.player-card strong{font:800 27px 'Manrope';letter-spacing:-.06em;display:block}.player-values em{font-style:normal;font:700 9px 'Manrope';color:var(--muted);display:block;margin-top:-3px}.player-values em.low{color:#c42d28}
 .bag-card,.history-card{margin-top:14px;border-top:1px solid var(--line);padding-top:15px}
 .bag-card{display:grid;grid-template-columns:1fr auto;align-items:baseline;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800}
 .bag-card strong{font:800 23px 'Manrope';color:var(--ink);letter-spacing:-.05em}
@@ -156,6 +160,7 @@ button{color:inherit;border:0;cursor:pointer}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}.modal-actions button{height:40px;padding:0 17px}
 .exchange-grid{display:flex;gap:7px;flex-wrap:wrap;margin:18px 0}.exchange-grid .tile{width:52px;height:52px;cursor:pointer}
 .rules-list{font-size:11px;color:#555;line-height:1.55;padding-left:18px}
+.timer-modal h2{margin-bottom:17px}.timer-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.timer-modes button{min-height:67px;border:1px solid var(--line);background:#f4f1ea;border-radius:13px;padding:10px;text-align:left}.timer-modes button.selected{border-color:#2b2c30;background:#fff;box-shadow:inset 0 0 0 1px #2b2c30}.timer-modes b{display:block;font:800 12px 'Manrope'}.timer-modes span{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.timer-section{margin-top:18px}.timer-section>label{display:flex;justify-content:space-between;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:800;margin-bottom:8px}.timer-section>label b{color:var(--ink)}.timer-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.timer-choices button{height:37px;border-radius:10px;background:#efebe3;border:1px solid transparent;font:800 11px 'Manrope'}.timer-choices button.selected{background:#1d1f24;color:#fff}.timer-section small{display:block;margin-top:8px;font-size:9px;line-height:1.4;color:var(--muted)}
 .toast{position:fixed;z-index:100;left:50%;bottom:25px;transform:translate(-50%,20px);background:#1c1d20;color:#fff;padding:10px 15px;border-radius:10px;font-size:10px;font-weight:700;opacity:0;pointer-events:none;transition:.2s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
@@ -172,9 +177,9 @@ button{color:inherit;border:0;cursor:pointer}
   .home-content{min-height:100svh;display:flex;flex-direction:column;justify-content:flex-end;gap:25px;padding:92px 16px 18px}
   .home-title{width:100%;padding-left:5px}.brand-mark{display:none}.home-title h1{font-size:54px;line-height:.86}.home-title p{font-size:15px;margin-top:17px}
   .lobby-card{width:100%;border-radius:22px;padding:17px}.lobby-card-head{height:40px}.lobby-card-head h2{font-size:25px}.lobby-list{min-height:112px;max-height:196px;margin-bottom:11px}.lobby-empty{min-height:108px}
-  .create-game{height:56px}.join-row input,.join-row .secondary{height:44px}
+  .create-row{grid-template-columns:1fr 96px}.create-game,.timer-preset{height:56px}.timer-preset{padding:0 10px}.timer-preset b{font-size:15px}.join-row input,.join-row .secondary{height:44px}
 
-  .topbar{height:58px;padding:0 12px;grid-template-columns:1fr auto}.connection{display:none}.wordmark>span:last-child{display:none}
+  .topbar{height:58px;padding:0 10px;grid-template-columns:auto 1fr auto;gap:7px}.connection{display:none}.wordmark>span:last-child{display:none}.clock-strip{min-width:0;gap:4px}.game-clock{height:35px;min-width:68px;padding:4px 6px;border-radius:9px}.game-clock span{display:none}.game-clock b{font-size:13px}.game-clock i{width:15px;height:15px;font-size:7px}.room-pill{padding:6px 8px}.room-pill span{display:none}
   .game-shell{height:calc(100vh - 58px);display:flex;flex-direction:column}
   .table{padding:8px 8px 0;flex:0 0 auto}.board-wrap{display:block}
   .board{width:min(96vw,560px);min-width:0;margin:auto;border-width:5px;gap:1px}.cell:after{font-size:5px}.cell .tile{font-size:clamp(12px,4.1vw,22px)}
