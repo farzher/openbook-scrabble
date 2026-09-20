@@ -71,25 +71,44 @@ function unavailable(message='EV unavailable'){
   setStatus('error',message)
   board?.classList.remove('heat-loading')
 }
-function emitMoveEv(entry){
-  if(!entry?.moveKey||!SIDES.every(side=>entry.sides[side]?.result?.samples))return
-  const you=boardEv(entry.sides.you.result),opponent=boardEv(entry.sides.opponent.result)
+function sampleDepth(sides){
+  if(!sides)return 0
+  let depth=MAX_SAMPLES
+  for(const side of SIDES){
+    const data=sides[side]
+    if(!data?.result?.samples)return 0
+    depth=Math.min(depth,data.exact?MAX_SAMPLES:data.result.samples)
+  }
+  return depth
+}
+function fullyRefined(entry){
+  return SIDES.every(side=>{
+    const data=entry?.sides?.[side]
+    return !!(data?.error||data?.exact||data?.result?.samples>=MAX_SAMPLES)
+  })
+}
+function emitMoveEv(moveKey,revision,sides){
+  if(!moveKey||!SIDES.every(side=>sides?.[side]?.result?.samples))return
+  const you=boardEv(sides.you.result),opponent=boardEv(sides.opponent.result)
   if(you===null||opponent===null)return
+  const samples=sampleDepth(sides)
   document.dispatchEvent(new CustomEvent('openbook-move-ev',{detail:{
-    revision:entry.revision,moveKey:entry.moveKey,you,opponent,diff:you-opponent,
-    samples:Math.min(entry.sides.you.result.samples,entry.sides.opponent.result.samples),
-    done:SIDES.every(side=>complete(entry.sides[side]))
+    revision,moveKey,you,opponent,diff:you-opponent,samples,done:samples>=MAX_SAMPLES
   }}))
 }
-function handleWorkerResult(data,jobKey){
+function foregroundBusy(cacheKey){
+  for(const jobKey of jobs.values())if(jobKey===cacheKey)return true
+  return false
+}
+function handleForegroundResult(data,jobKey){
   if(!jobKey)return false
   const entry=cache.get(jobKey)
-  if(!entry)return false
+  if(!entry||entry.id!==data.id)return false
 
   entry.sides[data.side]=data
   entry.updated=performance.now()
   touchCache(jobKey,entry)
-  emitMoveEv(entry)
+  emitMoveEv(entry.moveKey,entry.revision,entry.sides)
 
   if(jobKey===key){
     pending=entry.sides
@@ -110,25 +129,47 @@ function handleWorkerResult(data,jobKey){
   }
   return false
 }
-function makeBackgroundWorker(words){
-  const slot={worker:null,busy:false,id:0,key:''}
-  try{
-    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-prefetch1',import.meta.url),{type:'module'})
-    slot.worker.onmessage=({data})=>{
-      if(data.id!==slot.id)return
-      const done=handleWorkerResult(data,slot.key)
-      if(done){
-        slot.busy=false
-        slot.id=0
-        slot.key=''
-        pumpBackground()
-      }
+function finishBackground(slot){
+  if(slot.job?.token)bgQueued.delete(slot.job.token)
+  slot.busy=false
+  slot.id=0
+  slot.key=''
+  slot.job=null
+  slot.sides={}
+  pumpBackground()
+}
+function handleBackgroundResult(slot,data){
+  if(!slot.busy||data.id!==slot.id)return
+  slot.sides[data.side]=data
+  emitMoveEv(slot.job.moveKey,slot.job.revision,slot.sides)
+  if(!SIDES.every(side=>complete(slot.sides)))return
+
+  const depth=sampleDepth(slot.sides)
+  const current=cache.get(slot.key)
+  const currentDepth=sampleDepth(current?.sides)
+  if(!foregroundBusy(slot.key)&&depth>=currentDepth){
+    const entry={
+      id:slot.id,sides:{...slot.sides},done:true,updated:performance.now(),
+      moveKey:slot.job.moveKey,revision:slot.job.revision,background:true,targetSamples:slot.job.samples
     }
+    touchCache(slot.key,entry)
+    emitMoveEv(entry.moveKey,entry.revision,entry.sides)
+  }
+  finishBackground(slot)
+}
+function makeBackgroundWorker(words){
+  const slot={worker:null,busy:false,id:0,key:'',job:null,sides:{}}
+  try{
+    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-progressive1',import.meta.url),{type:'module'})
+    slot.worker.onmessage=({data})=>handleBackgroundResult(slot,data)
     slot.worker.onerror=event=>{
       console.error('Background EV worker failed',event)
       slot.worker?.terminate()
       slot.worker=null
+      if(slot.job?.token)bgQueued.delete(slot.job.token)
       slot.busy=false
+      slot.job=null
+      slot.sides={}
     }
     slot.worker.postMessage({type:'init',words})
   }catch(error){
@@ -141,39 +182,64 @@ function pumpBackground(){
     if(slot.busy||!slot.worker)continue
     let job
     while((job=bgQueue.shift())){
-      bgQueued.delete(job.key)
-      if(job.turnKey!==cacheTurn||cache.has(job.key))continue
+      if(job.turnKey!==cacheTurn){bgQueued.delete(job.token);continue}
+      const current=cache.get(job.key)
+      if(foregroundBusy(job.key)||sampleDepth(current?.sides)>=job.samples){
+        bgQueued.delete(job.token)
+        continue
+      }
       break
     }
     if(!job)continue
 
+    const payloads=analysisPayloads(job.state,job.move,job.myId)
+    if(!payloads){
+      bgQueued.delete(job.token)
+      continue
+    }
+
     const id=++request
-    const entry={id,sides:{},done:false,updated:performance.now(),moveKey:job.moveKey,revision:job.revision,background:true}
-    touchCache(job.key,entry)
     slot.busy=true
     slot.id=id
     slot.key=job.key
-
+    slot.job=job
+    slot.sides={}
     for(const side of SIDES){
-      const payload=job.payloads[side]
-      slot.worker.postMessage({id,side,...payload,reportEvery:16})
+      slot.worker.postMessage({
+        id,side,...payloads[side],
+        samples:job.samples,
+        reportEvery:job.samples
+      })
     }
   }
 }
 function dropQueued(cacheKey){
-  if(!bgQueued.has(cacheKey))return
-  bgQueued.delete(cacheKey)
-  bgQueue=bgQueue.filter(job=>job.key!==cacheKey)
+  bgQueue=bgQueue.filter(job=>{
+    if(job.key!==cacheKey)return true
+    bgQueued.delete(job.token)
+    return false
+  })
+  for(const slot of bgWorkers){
+    if(!slot.busy||slot.key!==cacheKey)continue
+    slot.worker?.postMessage({type:'cancel'})
+    if(slot.job?.token)bgQueued.delete(slot.job.token)
+    slot.busy=false
+    slot.id=0
+    slot.key=''
+    slot.job=null
+    slot.sides={}
+  }
+  pumpBackground()
 }
 export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-prefetch1',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-progressive1',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
       const jobKey=jobs.get(data.id)
       if(!jobKey)return
-      if(handleWorkerResult(data,jobKey)){
+      if(handleForegroundResult(data,jobKey)){
         jobs.delete(data.id)
         pumpBackground()
       }
