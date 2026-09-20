@@ -46,7 +46,7 @@ class FakeWorker{
 }
 globalThis.Worker=FakeWorker
 globalThis.window={Worker:FakeWorker}
-const {initThreats,prefetchThreats,updateThreats}=await import('./threat-ui.js')
+const {initThreats,prefetchThreats,updateThreats,prioritizeThreats,releaseThreatPriority}=await import('./threat-ui.js')
 const state={status:'playing',revision:1,board:emptyBoard(),bagCount:80,
   players:[{id:'me',rack:['A','T']},{id:'them',rackCount:7}]}
 const moves=Array.from({length:14},(_,i)=>({score:30-i,placements:[{r:7,c:i,letter:'A',blank:false}]}))
@@ -134,6 +134,33 @@ while(background.some(w=>w.pending.length)){
   background.find(w=>w.pending.length).finish()
 }
 assert.equal(evs().filter(e=>e.revision===4&&e.done).length,1)
+// Rapid hovering must preempt, not multiplex all old previews on one worker.
+const hoverState={...state,revision:5}
+prefetchThreats(hoverState,moves.slice(0,2),'me')
+updateThreats(hoverState,moves[0],'me')
+const firstHover=foreground.pending.splice(0,2)
+assert.ok(firstHover.every(job=>job.samples===96))
+for(const job of firstHover)foreground.reply(job,{
+  result:{samples:8,bestTotal:80,scores:Array(225).fill(0)},done:false
+})
+updateThreats(hoverState,moves[1],'me')
+assert.equal(foreground.pending.length,2,'only the current hover owns the foreground worker')
+const beforeOldHover=evs().length
+for(const job of firstHover)foreground.reply(job)
+assert.equal(evs().length,beforeOldHover,'canceled hover results cannot overwrite cached partials')
+releaseThreatPriority()
+assert.equal(foreground.pending.length,0,'leaving relinquishes foreground priority')
+assert.ok(background.some(w=>w.pending.length),'visible moves resume normal refinement')
+prioritizeThreats()
+assert.equal(foreground.pending.length,2,'re-entering the same preview restores priority')
+assert.ok(foreground.pending.every(job=>job.samples===96))
+foreground.finish()
+iterations=0
+while(background.some(w=>w.pending.length)){
+  assert.ok(++iterations<20)
+  background.find(w=>w.pending.length).finish()
+}
+assert.equal(new Set(evs().filter(e=>e.revision===5&&e.done).map(e=>e.moveKey)).size,2)
 console.log(`Threat UI scheduler tests passed (${cores} logical cores)`)
 if(!process.env.TEST_EV_CORES){
   for(const cores of [1,2,8,16,32]){

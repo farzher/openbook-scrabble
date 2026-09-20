@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-visible6'
+import {initThreats,updateThreats,prefetchThreats,prioritizeThreats,releaseThreatPriority} from './threat-ui.js?v=ev-hover7'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -988,11 +988,20 @@ els.moves.addEventListener('pointerover',e=>{
   const row=e.target.closest('.move-row')
   if(!row||row.contains(e.relatedTarget))return
   const m=moveFromElement(row)
-  if(m)previewMove(m)
+  if(m){previewMove(m);prioritizeThreats()}
+})
+els.moves.addEventListener('pointerout',e=>{
+  if(e.pointerType==='touch')return
+  const row=e.target.closest('.move-row')
+  if(row&&!row.contains(e.relatedTarget))releaseThreatPriority()
 })
 els.moves.addEventListener('focusin',e=>{
   const m=moveFromElement(e.target.closest('.move-row'))
-  if(m)previewMove(m)
+  if(m){previewMove(m);prioritizeThreats()}
+})
+els.moves.addEventListener('focusout',e=>{
+  const row=e.target.closest('.move-row')
+  if(row&&!row.contains(e.relatedTarget))releaseThreatPriority()
 })
 els.moves.onclick=e=>{
   if(e.target.closest('[data-more]')){visibleMoves+=250;renderMoves();return}

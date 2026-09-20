@@ -183,6 +183,17 @@ function handleBackgroundResult(slot,data){
     }
     touchCache(slot.key,entry)
     emitMoveEv(entry.moveKey,entry.revision,entry.sides)
+    if(slot.key===key){
+      pending=entry.sides
+      if(SIDES.every(side=>ready(pending[side]))){
+        results={...pending}
+        resultsKey=key
+        painted=null
+        paint()
+        renderBoardEv()
+      }
+      updateStatus(entry)
+    }
     if(!SIDES.some(side=>slot.sides[side]?.error))queueNextBackground(slot.job,depth)
   }
   finishBackground(slot)
@@ -519,8 +530,33 @@ export function prefetchThreats(state,moves,myId){
   pumpBackground()
 }
 
+function stopForegroundAnalysis(){
+  if(!jobs.size)return
+  worker?.postMessage({type:'cancel'})
+  const interrupted=[...jobs.values()]
+  jobs.clear()
+  for(const cacheKey of interrupted){
+    const entry=cache.get(cacheKey)
+    if(entry?.backgroundBase&&!fullyRefined(entry)){
+      queueBackground(entry.backgroundBase,nextSampleTarget(sampleDepth(entry.sides)))
+    }
+  }
+}
+// Hover/focus owns the foreground worker exclusively. Leaving a row retains
+// its samples but returns further refinement to the normal visible-row queue.
+export function releaseThreatPriority(){
+  if(!context?.preview)return
+  stopForegroundAnalysis()
+  pumpBackground()
+}
+export function prioritizeThreats(){
+  if(!context?.preview||fullyRefined(cache.get(key)))return
+  startForegroundAnalysis(context.state,context.preview,context.myId)
+}
 function startForegroundAnalysis(state,selected,myId){
   if(!worker||foregroundBusy(key))return
+  stopForegroundAnalysis()
+  dropQueued(key)
   const payloads=analysisPayloads(state,selected,myId)
   if(!payloads){unavailable();return}
 
@@ -530,12 +566,19 @@ function startForegroundAnalysis(state,selected,myId){
   const entry={
     id,sides:Object.fromEntries(SIDES.map(side=>[side,seedSides[side]
       ?{...seedSides[side],done:false}:undefined])),done:false,updated:performance.now(),
-    moveKey:selected?keyOfMove(selected):'',revision:state.revision,foreground:true
+    moveKey:selected?keyOfMove(selected):'',revision:state.revision,foreground:true,
+    backgroundBase:selected?{
+      key,moveKey:keyOfMove(selected),revision:state.revision,turnKey:cacheTurn,
+      state,move:selected,myId,rank:Math.max(0,[...visibleKeys].indexOf(key))
+    }:null
   }
   touchCache(key,entry)
   jobs.set(id,key)
   pending=entry.sides
   setStatus('busy','Refining EV')
+  if(entry.moveKey)document.dispatchEvent(new CustomEvent('openbook-move-ev-work',{detail:{
+    revision:entry.revision,moveKey:entry.moveKey,samples:sampleDepth(seedSides),target:MAX_SAMPLES
+  }}))
   for(const side of SIDES)worker.postMessage({
     id,side,...payloads[side],
     samples:MAX_SAMPLES,
@@ -572,6 +615,7 @@ export function updateThreats(state,selected,myId){
     return
   }
 
+  stopForegroundAnalysis()
   key=next
   hideTip()
   dropQueued(key)
