@@ -301,8 +301,23 @@ function act(action){
 function setState(next){
   if(!next||next.you!==myId)return
   const changed=!state||next.revision!==state.revision
+  let swapResult=null
+  if(pendingExchange&&changed){
+    const myIndex=next.players.findIndex(p=>p.id===myId)
+    const last=next.history?.[next.history.length-1]
+    if(last?.type==='exchange'&&last.player===myIndex){
+      const after=next.players[myIndex]?.rack||[]
+      const kept=[...pendingExchange.before]
+      for(const t of pendingExchange.outgoing){const i=kept.indexOf(t);if(i>=0)kept.splice(i,1)}
+      const incoming=[...after]
+      for(const t of kept){const i=incoming.indexOf(t);if(i>=0)incoming.splice(i,1)}
+      swapResult={outgoing:pendingExchange.outgoing,incoming}
+    }
+    pendingExchange=null
+  }
   state=next;timerSyncAt=performance.now();selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';render();startClockRendering()
   if(changed)computeMoves()
+  if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
 }
 
 function render(){
@@ -312,7 +327,7 @@ function render(){
   const myTurn=state.status==='playing'&&state.turn===myIndex
   els.players.innerHTML=state.players.map((p,i)=>`
     <div class="player-card ${state.turn===i&&state.status==='playing'?'active':''}">
-      <div><b>${escapeHtml(p.name)}${p.id===myId?' · you':''}</b><small>${p.rackCount} tiles</small></div>
+      <div class="player-identity">${p.id===myId?`<button class="player-name editable" data-rename title="Rename yourself"><b>${escapeHtml(p.name)}</b><i>✎</i></button>`:`<div class="player-name"><b>${escapeHtml(p.name)}</b></div>`}<small>${p.rackCount} tiles${p.id===myId?' · you':''}</small></div>
       <div class="player-values"><strong>${p.score}</strong><em data-side-clock="${i}"></em></div>
     </div>
   `).join('')
