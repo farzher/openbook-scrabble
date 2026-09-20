@@ -580,10 +580,11 @@ function renderMoves(){
   const shown=list.slice(0,visibleWords)
   els.moves.innerHTML=shown.map(g=>{
     const open=expandedWord===g.word
-    const head=`<button class="move-row word-row ${open?'selected':''}" aria-expanded="${open}" data-word="${g.word}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} placement${g.placements.length===1?'':'s'} <span class="move-chevron">${open?'−':'+'}</span></div></div><div class="move-score">${g.best}</div></button>`
-    if(!open)return head
     const placements=[...g.placements].sort((a,b)=>b.score-a.score||coord(a).localeCompare(coord(b)))
-    return head+`<div class="placement-list">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`
+    const bestMove=placements[0]
+    const head=`<button class="move-row word-row ${open?'selected':''}" aria-expanded="${open}" data-word="${g.word}" data-key="${encodeURIComponent(keyOfMove(bestMove))}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} placement${g.placements.length===1?'':'s'} <span class="move-chevron">${open?'−':'+'}</span></div></div><div class="move-score">${g.best}</div></button>`
+    const tray=open?`<div class="placement-list" role="group" aria-label="${g.word} placements">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`:''
+    return `<div class="move-group ${open?'open':''}">${head}${tray}</div>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more</button>`:'')
   if(focused){
     const target=[...els.moves.querySelectorAll('button')].find(b=>focused.key?b.dataset.key===focused.key:focused.word&&b.dataset.word===focused.word)
@@ -594,11 +595,18 @@ function coord(m){
   const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0]
   return`${String.fromCharCode(65+p.c)}${p.r+1}${m.direction==='V'?' ↓':' →'}`
 }
-function chooseMove(m){
-  selected=m;els.play.disabled=false;els.playScore.textContent=`+${m.score}`
-  sound('select')
-  renderBoard();renderMoves();renderRack(state.players.find(p=>p.id===myId)?.rack||[]);updatePreview()
+function previewMove(m,{refreshMoves=false,withSound=false}={}){
+  if(!m||selected&&keyOfMove(selected)===keyOfMove(m))return
+  selected=m
+  els.play.disabled=false
+  els.playScore.textContent=`+${m.score}`
+  if(withSound)sound('select')
+  renderBoard()
+  renderRack(state.players.find(p=>p.id===myId)?.rack||[])
+  updatePreview()
+  if(refreshMoves)renderMoves()
 }
+function chooseMove(m){previewMove(m,{refreshMoves:true,withSound:true})}
 function updatePreview(){
   updateThreats(state,selected,myId)
   const mine=state?.status==='playing'&&state.players[state.turn]?.id===myId
@@ -850,22 +858,39 @@ els.sortMenu.onclick=e=>{
   visibleWords=250
   renderMoves()
 }
+function moveFromElement(el){
+  const raw=el?.dataset.key
+  if(!raw)return null
+  const moveKey=decodeURIComponent(raw)
+  return moves.find(m=>keyOfMove(m)===moveKey)||null
+}
+els.moves.addEventListener('pointerover',e=>{
+  if(e.pointerType==='touch')return
+  const row=e.target.closest('.placement-row,.word-row')
+  if(!row||row.contains(e.relatedTarget))return
+  const m=moveFromElement(row)
+  if(m)previewMove(m)
+})
+els.moves.addEventListener('focusin',e=>{
+  const row=e.target.closest('.placement-row,.word-row')
+  const m=moveFromElement(row)
+  if(m)previewMove(m)
+})
 els.moves.onclick=e=>{
   if(e.target.closest('[data-more]')){visibleWords+=250;renderMoves();return}
   const placement=e.target.closest('.placement-row')
   if(placement){
-    const key=decodeURIComponent(placement.dataset.key),m=moves.find(x=>keyOfMove(x)===key)
+    const m=moveFromElement(placement)
     if(m)chooseMove(m)
     return
   }
   const row=e.target.closest('.word-row')
   if(!row)return
-  expandedWord=expandedWord===row.dataset.word?'':row.dataset.word
+  const opening=expandedWord!==row.dataset.word
+  expandedWord=opening?row.dataset.word:''
+  const m=moveFromElement(row)
+  if(m)previewMove(m,{withSound:true})
   renderMoves()
-  if(expandedWord){
-    const options=moves.filter(m=>m.word===expandedWord).sort((a,b)=>b.score-a.score)
-    if(options[0])chooseMove(options[0])
-  }
 }
 document.addEventListener('click',e=>{if(!e.target.closest('#moveSort')){els.sortMenu.classList.add('hidden');els.sortButton.setAttribute('aria-expanded','false')}if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',()=>{persistHost();if(isOpenHost())closeRoomListing(room)})
