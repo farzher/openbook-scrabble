@@ -28,7 +28,7 @@ const CORES=navigator.hardwareConcurrency||4
 const PRIORITY_ROWS=10
 // Workers do not execute on the UI thread. Reserve two logical cores for the
 // browser/OS and use the rest, up to eight, for continuous EV refinement.
-const BG_WORKERS=Math.max(1,Math.min(8,CORES-2))
+const BG_WORKERS=CORES<=4?1:CORES<=8?2:CORES<=12?3:4
 const canvas=document.createElement('canvas')
 canvas.width=canvas.height=240
 const brush=canvas.getContext('2d')
@@ -188,10 +188,17 @@ function handleBackgroundResult(slot,data){
   finishBackground(slot)
 }
 function makeBackgroundWorker(words){
-  const slot={worker:null,busy:false,id:0,key:'',job:null,sides:{}}
+  const slot={worker:null,ready:false,busy:false,id:0,key:'',job:null,sides:{}}
   try{
-    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-continuous2',import.meta.url),{type:'module'})
-    slot.worker.onmessage=({data})=>handleBackgroundResult(slot,data)
+    slot.worker=new Worker(new URL('./threat-worker.js?v=ev-bgfix2',import.meta.url),{type:'module'})
+    slot.worker.onmessage=({data})=>{
+      if(data.type==='ready'){
+        slot.ready=true
+        pumpBackground()
+        return
+      }
+      handleBackgroundResult(slot,data)
+    }
     slot.worker.onerror=event=>{
       console.error('Background EV worker failed',event)
       slot.worker?.terminate()
@@ -228,7 +235,7 @@ function takeBackgroundJob(){
 }
 function pumpBackground(){
   for(const slot of bgWorkers){
-    if(slot.busy||!slot.worker)continue
+    if(slot.busy||!slot.worker||!slot.ready)continue
     const job=takeBackgroundJob()
     if(!job)continue
 
@@ -293,8 +300,9 @@ export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-continuous2',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-bgfix2',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
+      if(data.type==='ready')return
       const jobKey=jobs.get(data.id)
       if(!jobKey)return
       if(handleForegroundResult(data,jobKey)){
