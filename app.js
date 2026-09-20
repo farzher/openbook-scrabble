@@ -12,15 +12,14 @@ const els={
   landing:$('#landing'),game:$('#game'),name:$('#nameInput'),roomInput:$('#roomInput'),
   create:$('#createBtn'),join:$('#joinBtn'),lobbyList:$('#lobbyList'),presence:$('#presenceText'),resume:$('#resumeBtn'),resumeLabel:$('#resumeLabel'),timerPreset:$('#timerPresetBtn'),timerPresetMode:$('#timerPresetMode'),timerPresetTime:$('#timerPresetTime'),
   board:$('#board'),rack:$('#rack'),players:$('#players'),bagCount:$('#bagCount'),bagMeter:$('#bagMeter'),unseenCount:$('#unseenCount'),oppRackCount:$('#oppRackCount'),blankCount:$('#blankCount'),tileTracker:$('#tileTracker'),statGrid:$('#statGrid'),statsBtn:$('#statsBtn'),
-  history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),summary:$('#wordSummary'),
-  search:$('#moveSearch'),sort:$('#moveSort'),sortButton:$('#moveSortButton'),sortLabel:$('#moveSortLabel'),sortMenu:$('#moveSortMenu'),turn:$('#turnBanner'),connection:$('#connection'),
+  history:$('#history'),moves:$('#movesList'),moveCount:$('#moveCount'),turn:$('#turnBanner'),connection:$('#connection'),
   roomCode:$('#roomCode'),copy:$('#copyRoomBtn'),clockStrip:$('#clockStrip'),play:$('#playBtn'),playScore:$('#playScore'),
   pass:$('#passBtn'),exchange:$('#exchangeBtn'),modalLayer:$('#modalLayer'),modal:$('#modal'),
   toast:$('#toast'),rules:$('#rulesBtn'),home:$('#homeBtn'),rackHint:$('#rackHint')
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],selected=null,expandedWord='',visibleWords=250,selectedExchange=new Set(),pendingExchange=null,moveSort='score',computing=0
+let moves=[],selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,hostTimerWatch=null,animatedRevision=-1,lastTransport='Connecting'
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -375,7 +374,7 @@ function setState(next){
     pendingExchange=null
   }
   state=next;timerSyncAt=performance.now()
-  if(changed){selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';els.search.value=''}
+  if(changed){selected=null;visibleMoves=250;els.playScore.textContent=''}
   render();startClockRendering()
   if(changed)computeMoves()
   if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
@@ -387,7 +386,7 @@ function render(){
     els.players.innerHTML='';els.rack.innerHTML='';els.history.innerHTML='';$('#compactScores').innerHTML=''
     els.tileTracker.innerHTML='';els.statGrid.innerHTML='';els.rackHint.textContent=''
     els.moves.innerHTML='<div class="moves-empty"><span class="empty-symbol">◇</span><b>A little company?</b><p>Your wordbook opens when both players are here. Invite a friend using the room button above.</p></div>'
-    els.moveCount.textContent='—';els.summary.textContent=''
+    els.moveCount.textContent='—'
     els.play.disabled=els.pass.disabled=els.exchange.disabled=true
     buildBoard();updatePreview();return
   }
@@ -431,7 +430,6 @@ function chooseSquare(cell){
   if(!candidates.length){toast(moves.length?'No available play on that square.':'No plays ready yet.');return}
   const current=selected?candidates.findIndex(m=>keyOfMove(m)===keyOfMove(selected)):-1
   const next=candidates[(current+1)%candidates.length]
-  expandedWord=next.word
   chooseMove(next)
 }
 els.board.addEventListener('click',e=>{const cell=e.target.closest('.cell');if(cell)chooseSquare(cell)})
@@ -546,7 +544,7 @@ async function computeMoves(){
   moves=[];selected=null
   if(!mine?.rack||state.status!=='playing'||state.turn!==myIndex){renderMoves();return}
   els.moves.innerHTML='<div class="moves-empty">Finding your possibilities…<div class="loading-line"><i></i></div></div>'
-  els.moveCount.textContent='…';els.summary.textContent=''
+  els.moveCount.textContent='…'
   await new Promise(r=>setTimeout(r,15))
   if(run!==computing||!state)return
   const found=await findMoves(state.board,mine.rack)
@@ -555,48 +553,37 @@ async function computeMoves(){
 }
 function renderMoves(){
   if(!state)return
-  const focused=els.moves.contains(document.activeElement)?{word:document.activeElement.dataset.word,key:document.activeElement.dataset.key}:null
+  const focusedKey=els.moves.contains(document.activeElement)?document.activeElement.dataset.key:null
   const myIndex=state.players.findIndex(p=>p.id===myId),myTurn=state.status==='playing'&&state.turn===myIndex
   if(!myTurn){
-    els.moveCount.textContent='—';els.summary.textContent='';els.moves.innerHTML=`<div class="moves-empty"><span class="empty-symbol">${state.status==='finished'?'✦':'◷'}</span><b>${state.status==='finished'?'Well played.':'Their turn to make a move'}</b><p>${state.status==='finished'?'Explore the board and game insights.':'Your available words will appear here when it’s your turn.'}</p></div>`;return
+    els.moveCount.textContent='—'
+    els.moves.innerHTML=`<div class="moves-empty"><span class="empty-symbol">${state.status==='finished'?'✦':'◷'}</span><b>${state.status==='finished'?'Well played.':'Their turn to make a move'}</b><p>${state.status==='finished'?'Explore the board and game insights.':'Your available moves will appear here when it’s your turn.'}</p></div>`
+    return
   }
-  const q=els.search.value.trim().toUpperCase(),sort=moveSort
-  const groups=new Map()
-  for(const m of moves){
-    if(q&&!m.word.includes(q))continue
-    if(!groups.has(m.word))groups.set(m.word,[])
-    groups.get(m.word).push(m)
-  }
-  let list=[...groups.entries()].map(([word,placements])=>({word,placements,best:Math.max(...placements.map(m=>m.score))}))
-  if(sort==='word')list.sort((a,b)=>a.word.localeCompare(b.word))
-  else if(sort==='length')list.sort((a,b)=>b.word.length-a.word.length||b.best-a.best)
-  else list.sort((a,b)=>b.best-a.best||a.word.localeCompare(b.word))
-  const unique=new Set(moves.map(m=>m.word)).size
-  els.moveCount.textContent=moves.length
-  els.summary.textContent=`${unique} words · ${moves.length} moves`
+
+  const list=[...moves].sort((a,b)=>b.score-a.score||a.word.localeCompare(b.word)||coord(a).localeCompare(coord(b)))
+  els.moveCount.textContent=list.length
   if(!list.length){
-    els.moves.innerHTML=`<div class="moves-empty">${moves.length?'No matching words. Try another search.':'No legal plays. Swap tiles or pass to continue.'}</div>`;return
+    els.moves.innerHTML='<div class="moves-empty">No legal plays. Swap tiles or pass to continue.</div>'
+    return
   }
-  const shown=list.slice(0,visibleWords)
-  els.moves.innerHTML=shown.map(g=>{
-    const open=expandedWord===g.word
-    const placements=[...g.placements].sort((a,b)=>b.score-a.score||coord(a).localeCompare(coord(b)))
-    const bestMove=placements[0]
-    const head=`<button class="move-row word-row ${open?'selected':''}" aria-expanded="${open}" data-word="${g.word}" data-key="${encodeURIComponent(keyOfMove(bestMove))}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} placement${g.placements.length===1?'':'s'} <span class="move-chevron">${open?'−':'+'}</span></div></div><div class="move-score">${g.best}</div></button>`
-    const tray=open?`<div class="placement-list" role="group" aria-label="${g.word} placements">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`:''
-    return `<div class="move-group ${open?'open':''}">${head}${tray}</div>`
-  }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more</button>`:'')
-  positionPlacementTray()
-  if(focused){
-    const target=[...els.moves.querySelectorAll('button')].find(b=>focused.key?b.dataset.key===focused.key:focused.word&&b.dataset.word===focused.word)
+
+  const shown=list.slice(0,visibleMoves)
+  const selectedKey=selected?keyOfMove(selected):''
+  els.moves.innerHTML=shown.map(m=>{
+    const moveKey=keyOfMove(m),active=moveKey===selectedKey
+    return `<button class="move-row ${active?'selected':''}" data-key="${encodeURIComponent(moveKey)}">
+      <div class="move-copy">
+        <div class="move-word">${m.word}</div>
+        <div class="move-meta">${coord(m)}${m.placements.length===7?' · BINGO':''}</div>
+      </div>
+      <div class="move-score">${m.score}</div>
+    </button>`
+  }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
+  if(focusedKey){
+    const target=[...els.moves.querySelectorAll('[data-key]')].find(b=>b.dataset.key===focusedKey)
     target?.focus({preventScroll:true})
   }
-}
-function positionPlacementTray(){
-  const group=els.moves.querySelector('.move-group.open')
-  if(!group)return
-  const listRect=els.moves.getBoundingClientRect(),rowRect=group.getBoundingClientRect()
-  group.classList.toggle('tray-up',rowRect.top+rowRect.height/2>listRect.top+listRect.height/2)
 }
 function coord(m){
   const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0]
@@ -625,7 +612,7 @@ function updatePreview(){
   $('#mobilePreviewScore').textContent=selected?`+${selected.score} points`:''
 }
 function clearPreview(){
-  selected=null;expandedWord='';els.play.disabled=true;els.playScore.textContent=''
+  selected=null;els.play.disabled=true;els.playScore.textContent=''
   if(state){renderBoard();renderRack(state.players.find(p=>p.id===myId)?.rack||[]);renderMoves()}
   updatePreview()
 }
@@ -754,7 +741,7 @@ function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
   computing++
-  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
+  lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
@@ -847,24 +834,6 @@ els.exchange.onclick=()=>{if(state?.bagCount<7){toast('Not enough tiles');return
 els.play.onclick=()=>{if(selected)act({type:'play',placements:selected.placements})}
 els.rules.onclick=showRules
 els.modalLayer.onclick=e=>{if(e.target===els.modalLayer||e.target.closest('[data-close]'))closeModal()}
-els.search.oninput=()=>{visibleWords=250;renderMoves()}
-els.sortButton.onclick=e=>{
-  e.stopPropagation()
-  const open=!els.sortMenu.classList.contains('hidden')
-  els.sortMenu.classList.toggle('hidden',open)
-  els.sortButton.setAttribute('aria-expanded',String(!open))
-}
-els.sortMenu.onclick=e=>{
-  const option=e.target.closest('[data-sort]')
-  if(!option)return
-  moveSort=option.dataset.sort
-  els.sortLabel.textContent=option.textContent
-  els.sortMenu.querySelectorAll('[data-sort]').forEach(x=>x.classList.toggle('selected',x===option))
-  els.sortMenu.classList.add('hidden')
-  els.sortButton.setAttribute('aria-expanded','false')
-  visibleWords=250
-  renderMoves()
-}
 function moveFromElement(el){
   const raw=el?.dataset.key
   if(!raw)return null
@@ -873,34 +842,23 @@ function moveFromElement(el){
 }
 els.moves.addEventListener('pointerover',e=>{
   if(e.pointerType==='touch')return
-  const row=e.target.closest('.placement-row,.word-row')
+  const row=e.target.closest('.move-row')
   if(!row||row.contains(e.relatedTarget))return
   const m=moveFromElement(row)
   if(m)previewMove(m)
 })
 els.moves.addEventListener('focusin',e=>{
-  const row=e.target.closest('.placement-row,.word-row')
-  const m=moveFromElement(row)
+  const m=moveFromElement(e.target.closest('.move-row'))
   if(m)previewMove(m)
 })
-els.moves.addEventListener('scroll',positionPlacementTray,{passive:true})
 els.moves.onclick=e=>{
-  if(e.target.closest('[data-more]')){visibleWords+=250;renderMoves();return}
-  const placement=e.target.closest('.placement-row')
-  if(placement){
-    const m=moveFromElement(placement)
-    if(m)chooseMove(m)
-    return
-  }
-  const row=e.target.closest('.word-row')
+  if(e.target.closest('[data-more]')){visibleMoves+=250;renderMoves();return}
+  const row=e.target.closest('.move-row')
   if(!row)return
-  const opening=expandedWord!==row.dataset.word
-  expandedWord=opening?row.dataset.word:''
   const m=moveFromElement(row)
-  if(m)previewMove(m,{withSound:true})
-  renderMoves()
+  if(m)chooseMove(m)
 }
-document.addEventListener('click',e=>{if(!e.target.closest('#moveSort')){els.sortMenu.classList.add('hidden');els.sortButton.setAttribute('aria-expanded','false')}if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
+document.addEventListener('click',e=>{if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',()=>{persistHost();if(isOpenHost())closeRoomListing(room)})
 
 const soundButton=$('#soundBtn')
@@ -932,7 +890,6 @@ document.addEventListener('keydown',e=>{
     return
   }
   if(e.key==='Escape'&&!els.game.classList.contains('hidden'))clearPreview()
-  if(e.key==='/'&&!els.game.classList.contains('hidden')&&!/INPUT|TEXTAREA/.test(e.target.tagName)){e.preventDefault();els.search.focus()}
 })
 renderSound()
 buildDemo();buildBoard()
