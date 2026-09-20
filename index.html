@@ -2,130 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#171a22">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f13">
   <title>Openbook Scrabble</title>
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div id="app">
-    <main class="landing" id="landing">
-      <div class="home-art" aria-hidden="true">
-        <div class="demo-grid" id="demoGrid"></div>
-        <div class="demo-tiles"><i>O<small>1</small></i><i>P<small>3</small></i><i>E<small>1</small></i><i>N<small>1</small></i></div>
-      </div>
-
-      <header class="home-nav">
-        <div class="home-wordmark"><span class="mini-mark">OS</span><b>Openbook Scrabble</b></div>
-        <label class="identity-pill">
-          <span>YOU</span>
-          <input id="nameInput" maxlength="18" autocomplete="nickname" aria-label="Your name">
-        </label>
-      </header>
-
-      <div class="home-content">
-        <section class="home-title">
-          <div class="brand-mark" aria-hidden="true"><span>O</span><span>S</span></div>
-          <h1>Openbook<br><strong>Scrabble</strong></h1>
-          <p>All the words.<br>Just the strategy.</p>
-        </section>
-
-        <section class="lobby-card">
-          <div class="lobby-card-head">
-            <h2>Play</h2>
-            <div class="presence"><i></i><span id="presenceText">Looking…</span></div>
-          </div>
-
-          <div class="lobby-list" id="lobbyList">
-            <div class="lobby-empty"><i>◇</i><span>No open games</span></div>
-          </div>
-
-          <div class="create-row">
-            <button class="primary create-game" id="createBtn">
-              <span class="plus">+</span>
-              <b>New game</b>
-              <span class="arrow">↗</span>
-            </button>
-            <button class="timer-preset" id="timerPresetBtn" title="Timer settings">
-              <span id="timerPresetMode">Standard</span>
-              <b id="timerPresetTime">25:00</b>
-            </button>
-          </div>
-
-          <div class="join-row">
-            <input id="roomInput" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="ROOM CODE" aria-label="Room code">
-            <button class="secondary" id="joinBtn">Join</button>
-          </div>
-        </section>
-      </div>
-    </main>
-
-    <main class="game hidden" id="game">
-      <header class="topbar">
-        <button class="wordmark" id="homeBtn"><span class="mini-mark">OS</span><span>Openbook <b>Scrabble</b></span></button>
-        <div class="clock-strip" id="clockStrip"></div>
-        <div class="top-actions">
-          <div class="connection" id="connection" title="Connection"><i></i></div>
-          <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
-        </div>
-      </header>
-
-      <section class="game-shell">
-        <aside class="left-rail">
-          <div class="players" id="players"></div>
-          <div class="bag-card">
-            <span>Tiles</span><strong id="bagCount">—</strong>
-            <div class="bag-meter"><i id="bagMeter"></i></div>
-          </div>
-          <div class="history-card">
-            <div class="panel-title"><span>Game</span><button id="rulesBtn">?</button></div>
-            <div class="history" id="history"></div>
-          </div>
-        </aside>
-
-        <section class="table">
-          <div class="turn-banner" id="turnBanner">Waiting…</div>
-          <div class="board-wrap">
-            <div class="board" id="board" aria-label="Scrabble board"></div>
-          </div>
-
-          <div class="rack-zone">
-            <div class="rack-label"><span>Your rack</span><small id="rackHint"></small></div>
-            <div class="rack" id="rack"></div>
-            <div class="turn-actions">
-              <button class="ghost" id="exchangeBtn">Swap</button>
-              <button class="ghost" id="passBtn">Pass</button>
-              <button class="primary play-btn" id="playBtn" disabled>Play <span id="playScore"></span></button>
-            </div>
-          </div>
-        </section>
-
-        <aside class="moves-panel">
-          <div class="moves-head">
-            <h2>Plays</h2>
-            <div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div>
-          </div>
-          <div class="moves-tools">
-            <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find…"></div>
-            <select id="moveSort" aria-label="Sort plays">
-              <option value="score">Score</option>
-              <option value="word">A–Z</option>
-              <option value="length">Length</option>
-            </select>
-          </div>
-          <div class="word-summary" id="wordSummary"></div>
-          <div class="moves-list" id="movesList"></div>
-        </aside>
-      </section>
-    </main>
-
-    <div class="modal-layer hidden" id="modalLayer">
-      <div class="modal" id="modal"></div>
+<div id="app">
+  <main class="landing" id="landing">
+    <div class="home-art" aria-hidden="true">
+      <div class="demo-grid" id="demoGrid"></div>
+      <div class="demo-tiles"><i>O<small>1</small></i><i>P<small>3</small></i><i>E<small>1</small></i><i>N<small>1</small></i></div>
     </div>
-    <div class="toast" id="toast"></div>
-  </div>
+    <header class="home-nav">
+      <div class="home-wordmark"><span class="mini-mark">OS</span><b>Openbook Scrabble</b></div>
+      <label class="identity-pill"><span>YOU</span><input id="nameInput" maxlength="18" autocomplete="nickname" aria-label="Your name"></label>
+    </header>
+    <div class="home-content">
+      <section class="home-title">
+        <div class="brand-mark" aria-hidden="true"><span>O</span><span>S</span></div>
+        <h1>Openbook<br><strong>Scrabble</strong></h1>
+        <p>All the words.<br>Just the strategy.</p>
+      </section>
+      <section class="lobby-card">
+        <div class="lobby-card-head"><h2>Play</h2><div class="presence"><i></i><span id="presenceText">Looking…</span></div></div>
+        <div class="lobby-list" id="lobbyList"><div class="lobby-empty"><i>◇</i><span>No open games</span></div></div>
+        <div class="create-row">
+          <button class="primary create-game" id="createBtn"><span class="plus">+</span><b>New game</b><span class="arrow">↗</span></button>
+          <button class="timer-preset" id="timerPresetBtn" title="Timer settings"><span id="timerPresetMode">Standard</span><b id="timerPresetTime">25:00</b></button>
+        </div>
+        <div class="join-row">
+          <input id="roomInput" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="ROOM CODE" aria-label="Room code">
+          <button class="secondary" id="joinBtn">Join</button>
+        </div>
+      </section>
+    </div>
+  </main>
 
-  <script type="module" src="./src/app.js"></script>
+  <main class="game hidden" id="game">
+    <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+    <header class="topbar">
+      <button class="wordmark" id="homeBtn"><span class="mini-mark">OS</span><span>Openbook <b>Scrabble</b></span></button>
+      <div class="clock-strip" id="clockStrip"></div>
+      <div class="top-actions">
+        <button class="stats-button" id="statsBtn" title="Game statistics">▦</button>
+        <div class="connection" id="connection" title="Connecting"><i></i><span>Connecting</span></div>
+        <button class="room-pill" id="copyRoomBtn" title="Copy invite link"><span>ROOM</span><b id="roomCode">—</b><i>⧉</i></button>
+      </div>
+    </header>
+
+    <section class="game-shell">
+      <aside class="left-rail">
+        <div class="players" id="players"></div>
+
+        <section class="rail-card tracker-card">
+          <div class="rail-heading"><span>Unseen</span><strong id="unseenCount">—</strong></div>
+          <div class="tile-tracker" id="tileTracker"></div>
+          <div class="tracker-foot">
+            <span>Bag <b id="bagCount">—</b></span>
+            <span>Opp <b id="oppRackCount">—</b></span>
+            <span>Blanks <b id="blankCount">—</b></span>
+          </div>
+          <div class="bag-meter"><i id="bagMeter"></i></div>
+        </section>
+
+        <section class="rail-card stats-card">
+          <div class="rail-heading"><span>Game</span><button id="rulesBtn" title="Rules">?</button></div>
+          <div class="stat-grid" id="statGrid"></div>
+        </section>
+
+        <section class="history-card">
+          <div class="rail-heading"><span>Recent</span></div>
+          <div class="history" id="history"></div>
+        </section>
+      </aside>
+
+      <section class="table">
+        <div class="turn-banner" id="turnBanner">Waiting…</div>
+        <div class="board-wrap"><div class="board" id="board" aria-label="Scrabble board"></div></div>
+        <div class="rack-zone">
+          <div class="rack-label"><span>Your rack</span><small id="rackHint"></small></div>
+          <div class="rack" id="rack"></div>
+          <div class="turn-actions">
+            <button class="ghost" id="exchangeBtn">Swap</button>
+            <button class="ghost" id="passBtn">Pass</button>
+            <button class="primary play-btn" id="playBtn" disabled>Play <span id="playScore"></span></button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="moves-panel">
+        <div class="moves-head"><h2>Plays</h2><div class="move-count"><strong id="moveCount">—</strong><span>moves</span></div></div>
+        <div class="moves-tools">
+          <div class="search"><span>⌕</span><input id="moveSearch" placeholder="Find…"></div>
+          <select id="moveSort" aria-label="Sort plays"><option value="score">Score</option><option value="word">A–Z</option><option value="length">Length</option></select>
+        </div>
+        <div class="word-summary" id="wordSummary"></div>
+        <div class="moves-list" id="movesList"></div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="modal-layer hidden" id="modalLayer"><div class="modal" id="modal"></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
