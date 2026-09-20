@@ -33,6 +33,15 @@ The game exposes information a perfect human tile-counter could derive from publ
 
 The game also surfaces public strategic context such as score differential, turn count, best scoring play, bingo count, scoreless-turn pressure, move history, clocks, and connection transport. It intentionally does not expose the opponent's actual rack or exact bag composition.
 
+## Interface
+
+- Board-first forest-green table, warm tiles, readable move cards, board coordinates, and a bonus legend.
+- Select a word to preview its highest-scoring placement, then explore its other placements. Previewed rack tiles dim so the remaining rack is easy to see. Clear with **Escape**; press **/** to search.
+- Game insights collapse on desktop; compact scores and the stats button keep smaller screens readable. On mobile, a selected-move dock offers **View board** and **Play** while browsing away from the board.
+- The **♪** button enables quiet synthesized sounds for previews, turns, plays, swaps, passes, and game completion. Sound is off by default and the preference is remembered. No audio files are downloaded.
+- Dialogs support keyboard focus containment and Escape. Animation respects the system’s reduced-motion preference.
+- Move generation runs in a module worker where supported, keeping scrolling, clocks, and input responsive. Older browsers fall back to the main-thread engine.
+
 ## Wordbook
 
 The initial build loads **ENABLE (Enhanced North American Benchmark Lexicon)** at runtime from the `dolph/dictionary` mirror. ENABLE contains roughly 172,800 words and was released into the public domain.
@@ -56,7 +65,10 @@ GitHub Pages can serve the repository as-is.
 ## Files
 
 - `index.html` — application shell
-- `styles.css` — responsive visual design
+- `styles.css` — base visual design
+- `polish.css` — board-first theme, readable controls, responsive layouts, and accessibility states
+- `sounds.js` — opt-in Web Audio feedback
+- `move-worker.js` — background move generation
 - `game.js` — board rules, scoring, timers, bag/racks, validation, move generation
 - `app.js` — UI, rooms, live lobby directory, strategy statistics, host authority, reconnect behavior
 

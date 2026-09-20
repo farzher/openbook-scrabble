@@ -1,6 +1,8 @@
 import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, checkStandardTimeout, normalizeTimerConfig} from './game.js'
 
+import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
+
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
 const DIRECTORY_TTL=12_000
@@ -23,6 +25,38 @@ const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
 let timerPrefs=loadTimerPrefs()
 let roomTimer=null
+let moveWorker=null,workerRequest=0
+const workerJobs=new Map()
+function startMoveWorker(words){
+  if(!('Worker' in window))return
+  try{
+    moveWorker=new Worker(new URL('./move-worker.js',import.meta.url),{type:'module'})
+    moveWorker.onmessage=({data})=>{
+      const job=workerJobs.get(data.id)
+      if(!job)return
+      workerJobs.delete(data.id)
+      if(data.error)job.reject(Error(data.error));else job.resolve(data.moves)
+    }
+    moveWorker.onerror=()=>{
+      moveWorker?.terminate();moveWorker=null
+      for(const job of workerJobs.values())job.reject(Error('Move worker unavailable'))
+      workerJobs.clear()
+    }
+    moveWorker.postMessage({type:'init',words})
+  }catch{moveWorker?.terminate();moveWorker=null}
+}
+async function findMoves(board,rack){
+  if(moveWorker){
+    try{
+      return await new Promise((resolve,reject)=>{
+        const id=++workerRequest
+        workerJobs.set(id,{resolve,reject})
+        try{moveWorker.postMessage({id,board,rack})}catch(error){workerJobs.delete(id);reject(error)}
+      })
+    }catch{/* Older browsers can still use the synchronous engine. */}
+  }
+  return generateMoves(board,rack,lex)
+}
 
 const uid=()=>{const a=new Uint8Array(9);crypto.getRandomValues(a);return [...a].map(x=>x.toString(36)).join('').slice(0,12)}
 const directoryId=uid()
@@ -76,7 +110,7 @@ const currentName=()=>{
   saveName(n)
   return n
 }
-const toast=msg=>{els.toast.textContent=msg;els.toast.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>els.toast.classList.remove('show'),1500)}
+const toast=msg=>{els.toast.textContent=msg;els.toast.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>els.toast.classList.remove('show'),2800)}
 const escapeHtml=s=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
 
 function buildDemo(){
@@ -94,7 +128,7 @@ function buildBoard(){
     d.className=`cell ${p||''} ${r===7&&c===7?'center':''}`
     d.dataset.r=r;d.dataset.c=c
     d.dataset.premium=r===7&&c===7?'★':p?p.toUpperCase():''
-    if(p)d.title=premiumNames[p]
+    d.title=`${String.fromCharCode(65+c)}${r+1}${p?' · '+premiumNames[p]:''}`
     els.board.append(d)
   }
 }
@@ -116,7 +150,9 @@ async function loadLexicon(quiet=false){
     const cached=sessionStorage.getItem('enable-words')
     const text=cached||await fetch(DICTIONARY_URL).then(r=>{if(!r.ok)throw Error('Dictionary download failed');return r.text()})
     if(!cached)try{sessionStorage.setItem('enable-words',text)}catch{}
-    lex=new Lexicon(text.split(/\r?\n/))
+    const words=text.split(/\r?\n/)
+    lex=new Lexicon(words)
+    startMoveWorker(words)
     return lex
   })().catch(e=>{lexPromise=null;throw e})
   try{
@@ -317,6 +353,11 @@ function act(action){
 function setState(next){
   if(!next||next.you!==myId)return
   const changed=!state||next.revision!==state.revision
+  if(changed&&state){
+    const mine=next.players.findIndex(p=>p.id===myId)
+    const last=next.history?.[next.history.length-1]
+    sound(next.status==='finished'?'finish':next.turn===mine?'turn':last?.type)
+  }
   let swapResult=null
   if(pendingExchange&&changed){
     const myIndex=next.players.findIndex(p=>p.id===myId)
@@ -332,14 +373,22 @@ function setState(next){
     pendingExchange=null
   }
   state=next;timerSyncAt=performance.now()
-  if(changed){selected=null;expandedWord='';visibleWords=250;els.playScore.textContent=''}
+  if(changed){selected=null;expandedWord='';visibleWords=250;els.playScore.textContent='';els.search.value=''}
   render();startClockRendering()
   if(changed)computeMoves()
   if(swapResult)setTimeout(()=>showSwapResult(swapResult),120)
 }
 
 function render(){
-  if(!state){els.turn.textContent=role==='host'?'Waiting for player':'Joining…';return}
+  if(!state){
+    els.turn.textContent=role==='host'?'Share your room link to invite a friend':'Joining your game…'
+    els.players.innerHTML='';els.rack.innerHTML='';els.history.innerHTML='';$('#compactScores').innerHTML=''
+    els.tileTracker.innerHTML='';els.statGrid.innerHTML='';els.rackHint.textContent=''
+    els.moves.innerHTML='<div class="moves-empty"><span class="empty-symbol">◇</span><b>A little company?</b><p>Your wordbook opens when both players are here. Invite a friend using the room button above.</p></div>'
+    els.moveCount.textContent='—';els.summary.textContent=''
+    els.play.disabled=els.pass.disabled=els.exchange.disabled=true
+    buildBoard();updatePreview();return
+  }
   const me=state.players.find(p=>p.id===myId)
   const myIndex=state.players.findIndex(p=>p.id===myId)
   const myTurn=state.status==='playing'&&state.turn===myIndex
@@ -349,6 +398,7 @@ function render(){
       <div class="player-values"><strong>${p.score}</strong><em data-side-clock="${i}"></em></div>
     </div>
   `).join('')
+  $('#compactScores').innerHTML=state.players.map((p,i)=>`<span class="${state.turn===i&&state.status==='playing'?'active':''}"><span>${p.id===myId?'You':escapeHtml(p.name)}</span><b>${p.score}</b></span>`).join('')
   els.bagCount.textContent=state.bagCount
   els.bagMeter.style.width=`${state.bagCount/86*100}%`
   if(state.status==='finished')els.turn.textContent=finishText()
@@ -357,7 +407,7 @@ function render(){
   els.turn.classList.toggle('mine',myTurn)
   els.pass.disabled=els.exchange.disabled=!myTurn
   els.play.disabled=!myTurn||!selected
-  renderBoard();renderRack(me?.rack||[]);renderStrategyStats();renderHistory();renderMoves()
+  renderBoard();renderRack(me?.rack||[]);renderStrategyStats();renderHistory();renderMoves();updatePreview()
   if(state.status==='finished'&&!document.body.dataset.finished){
     document.body.dataset.finished='1'
     setTimeout(showFinished,250)
@@ -392,8 +442,14 @@ function renderBoard(){
 }
 function renderRack(rack){
   els.rack.innerHTML=''
-  rack.forEach((l,i)=>{const t=tileEl(l==='?'?'':l,l==='?');t.dataset.i=i;els.rack.append(t)})
-  els.rackHint.textContent=selected?`${selected.word} · ${selected.score}`:(state&&state.turn===state.players.findIndex(p=>p.id===myId)?'Choose a play':'')
+  const used=(selected?.placements||[]).map(p=>p.blank?'?':p.letter)
+  rack.forEach((l,i)=>{
+    const t=tileEl(l==='?'?'':l,l==='?');t.dataset.i=i
+    const index=used.indexOf(l)
+    if(index>=0){t.classList.add('in-preview');used.splice(index,1)}
+    els.rack.append(t)
+  })
+  els.rackHint.textContent=selected?`${selected.placements.length} tiles in preview`:(state&&state.turn===state.players.findIndex(p=>p.id===myId)?'Choose a play':'')
 }
 function unseenTiles(){
   const counts={...DISTRIBUTION}
@@ -452,7 +508,7 @@ function showStats(){
 
 function renderHistory(){
   const hs=state.history||[]
-  if(!hs.length){els.history.innerHTML='';return}
+  if(!hs.length){els.history.innerHTML='<div class="history-empty">A fresh board.<br>Your story starts with the first word.</div>';return}
   els.history.innerHTML=[...hs].reverse().map(h=>{
     if(h.type==='end')return'<div class="history-entry"><b>Game over</b></div>'
     const p=state.players[h.player]?.name||'Player'
@@ -466,18 +522,20 @@ async function computeMoves(){
   const run=++computing,mine=state?.players.find(p=>p.id===myId),myIndex=state?.players.findIndex(p=>p.id===myId)
   moves=[];selected=null
   if(!mine?.rack||state.status!=='playing'||state.turn!==myIndex){renderMoves();return}
-  els.moves.innerHTML='<div class="moves-empty">Opening…<div class="loading-line"><i></i></div></div>'
+  els.moves.innerHTML='<div class="moves-empty">Finding your possibilities…<div class="loading-line"><i></i></div></div>'
   els.moveCount.textContent='…';els.summary.textContent=''
   await new Promise(r=>setTimeout(r,15))
-  const found=generateMoves(state.board,mine.rack,lex)
-  if(run!==computing)return
+  if(run!==computing||!state)return
+  const found=await findMoves(state.board,mine.rack)
+  if(run!==computing||!state)return
   moves=found;renderMoves()
 }
 function renderMoves(){
   if(!state)return
+  const focused=els.moves.contains(document.activeElement)?{word:document.activeElement.dataset.word,key:document.activeElement.dataset.key}:null
   const myIndex=state.players.findIndex(p=>p.id===myId),myTurn=state.status==='playing'&&state.turn===myIndex
   if(!myTurn){
-    els.moveCount.textContent='—';els.summary.textContent='';els.moves.innerHTML='<div class="moves-empty">Waiting…</div>';return
+    els.moveCount.textContent='—';els.summary.textContent='';els.moves.innerHTML=`<div class="moves-empty"><span class="empty-symbol">${state.status==='finished'?'✦':'◷'}</span><b>${state.status==='finished'?'Well played.':'Their turn to make a move'}</b><p>${state.status==='finished'?'Explore the board and game insights.':'Your available words will appear here when it’s your turn.'}</p></div>`;return
   }
   const q=els.search.value.trim().toUpperCase(),sort=moveSort
   const groups=new Map()
@@ -494,16 +552,20 @@ function renderMoves(){
   els.moveCount.textContent=moves.length
   els.summary.textContent=`${unique} words · ${moves.length} moves`
   if(!list.length){
-    els.moves.innerHTML=`<div class="moves-empty">${moves.length?'No matches':'No play'}</div>`;return
+    els.moves.innerHTML=`<div class="moves-empty">${moves.length?'No matching words. Try another search.':'No legal plays. Swap tiles or pass to continue.'}</div>`;return
   }
   const shown=list.slice(0,visibleWords)
   els.moves.innerHTML=shown.map(g=>{
     const open=expandedWord===g.word
-    const head=`<button class="move-row word-row ${open?'selected':''}" data-word="${g.word}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} spot${g.placements.length===1?'':'s'}${g.word.length===7?' · 7':''}</div></div><div class="move-score">${g.best}</div></button>`
+    const head=`<button class="move-row word-row ${open?'selected':''}" aria-expanded="${open}" data-word="${g.word}"><div><div class="move-word">${g.word}</div><div class="move-meta">${g.placements.length} placement${g.placements.length===1?'':'s'} <span class="move-chevron">${open?'−':'+'}</span></div></div><div class="move-score">${g.best}</div></button>`
     if(!open)return head
     const placements=[...g.placements].sort((a,b)=>b.score-a.score||coord(a).localeCompare(coord(b)))
     return head+`<div class="placement-list">${placements.map(m=>`<button class="placement-row ${selected&&keyOfMove(selected)===keyOfMove(m)?'selected':''}" data-key="${encodeURIComponent(keyOfMove(m))}"><span>${coord(m)}${m.placements.length===7?' · BINGO':''}</span><b>${m.score}</b></button>`).join('')}</div>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more</button>`:'')
+  if(focused){
+    const target=[...els.moves.querySelectorAll('button')].find(b=>focused.key?b.dataset.key===focused.key:focused.word&&b.dataset.word===focused.word)
+    target?.focus({preventScroll:true})
+  }
 }
 function coord(m){
   const p=m.placements.slice().sort((a,b)=>a.r-b.r||a.c-b.c)[0]
@@ -511,11 +573,34 @@ function coord(m){
 }
 function chooseMove(m){
   selected=m;els.play.disabled=false;els.playScore.textContent=`+${m.score}`
-  renderBoard();renderMoves();els.rackHint.textContent=`${m.word} · ${m.score}`
+  sound('select')
+  renderBoard();renderMoves();renderRack(state.players.find(p=>p.id===myId)?.rack||[]);updatePreview()
 }
-
-function openModal(html){els.modal.innerHTML=html;els.modalLayer.classList.remove('hidden')}
-function closeModal(){els.modalLayer.classList.add('hidden')}
+function updatePreview(){
+  const mine=state?.status==='playing'&&state.players[state.turn]?.id===myId
+  $('#previewBar').classList.toggle('has-preview',!!selected)
+  $('#previewText').innerHTML=selected?`<b>${selected.word}</b><span>${coord(selected)} · ${selected.placements.length} tiles</span><strong>+${selected.score} <small>pts</small></strong>`:mine?'Select a word to preview it on the board':state?.status==='finished'?'Game complete — nicely played.':'Your next move is worth the wait.'
+  $('#clearPreview').classList.toggle('hidden',!selected)
+  $('#mobilePreview').classList.toggle('hidden',!selected||els.game.classList.contains('hidden'))
+  $('#mobilePreviewWord').textContent=selected?.word||''
+  $('#mobilePreviewScore').textContent=selected?`+${selected.score} points`:''
+}
+function clearPreview(){
+  selected=null;expandedWord='';els.play.disabled=true;els.playScore.textContent=''
+  if(state){renderBoard();renderRack(state.players.find(p=>p.id===myId)?.rack||[]);renderMoves()}
+  updatePreview()
+}
+let modalReturnFocus=null
+function openModal(html){
+  if(els.modalLayer.classList.contains('hidden'))modalReturnFocus=document.activeElement
+  els.modal.onclick=null
+  els.modal.innerHTML=html;els.modalLayer.classList.remove('hidden')
+  els.modal.focus()
+}
+function closeModal(){
+  els.modalLayer.classList.add('hidden');els.modal.onclick=null
+  if(modalReturnFocus?.isConnected)modalReturnFocus.focus()
+}
 function rackChip(letter){
   return `<span class="swap-chip">${letter==='?'?'★':letter}<small>${letter==='?'?'':LETTER_SCORES[letter]}</small></span>`
 }
@@ -629,11 +714,12 @@ function join(code=els.roomInput.value){
 function parse(s){return safeParse(s)}
 function goHome(){
   if(isOpenHost())closeRoomListing(room)
+  computing++
   lobby?.close();lobby=null;clearInterval(timerFrame);state=null;hostGame=null;moves=[];selected=null;expandedWord='';pendingExchange=null;els.playScore.textContent='';els.clockStrip.innerHTML=''
   delete document.body.dataset.finished
   room='';role='';myId='';roomTimer=null;animatedRevision=-1;lastTransport='Connecting'
   els.game.classList.add('hidden');els.landing.classList.remove('hidden')
-  history.replaceState(null,'',location.pathname);closeModal();renderDirectory();renderResume()
+  history.replaceState(null,'',location.pathname);closeModal();updatePreview();renderDirectory();renderResume()
 }
 
 
@@ -712,9 +798,12 @@ els.roomInput.onkeydown=e=>{if(e.key==='Enter')join()}
 els.roomInput.oninput=()=>els.roomInput.value=els.roomInput.value.toUpperCase().replace(/[^A-Z2-9]/g,'')
 els.lobbyList.onclick=e=>{const row=e.target.closest('[data-room]');if(row)join(row.dataset.room)}
 els.name.onchange=()=>{currentName();advertiseRoom()}
-els.copy.onclick=()=>navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${room}`).then(()=>toast('Link copied'))
-els.home.onclick=()=>{if(confirm('Leave game?'))goHome()}
-els.pass.onclick=()=>openModal('<h2>Pass?</h2><div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="confirmPass">Pass</button></div>')
+els.copy.onclick=()=>navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${room}`).then(()=>toast('Invite link copied — send it to a friend')).catch(()=>toast(`Share room code: ${room}`))
+els.home.onclick=()=>{
+  openModal('<h2>Back to the lobby?</h2><p>You can return using Resume game. The game clock keeps running while you’re away.</p><div class="modal-actions"><button class="ghost" data-close>Stay here</button><button class="primary" id="leaveGame">Back to lobby</button></div>')
+  $('#leaveGame').onclick=goHome
+}
+els.pass.onclick=()=>openModal('<h2>Pass this turn?</h2><p>You’ll keep your tiles and your opponent will play next.</p><div class="modal-actions"><button class="ghost" data-close>Cancel</button><button class="primary" id="confirmPass">Pass</button></div>')
 els.exchange.onclick=()=>{if(state?.bagCount<7){toast('Not enough tiles');return}showExchange()}
 els.play.onclick=()=>{if(selected)act({type:'play',placements:selected.placements})}
 els.rules.onclick=showRules
@@ -757,6 +846,38 @@ els.moves.onclick=e=>{
 document.addEventListener('click',e=>{if(!e.target.closest('#moveSort')){els.sortMenu.classList.add('hidden');els.sortButton.setAttribute('aria-expanded','false')}if(e.target?.id==='confirmPass'){closeModal();act({type:'pass'})}})
 window.addEventListener('beforeunload',()=>{persistHost();if(isOpenHost())closeRoomListing(room)})
 
+const soundButton=$('#soundBtn')
+function renderSound(){
+  const on=soundEnabled()
+  soundButton.setAttribute('aria-pressed',String(on))
+  soundButton.title=on?'Mute sounds':'Enable sounds'
+  soundButton.setAttribute('aria-label',soundButton.title)
+  soundButton.querySelector('span').textContent=on?'Sound on':'Sound off'
+}
+soundButton.onclick=()=>{toggleSound();renderSound()}
+$('#clearPreview').onclick=clearPreview
+$('#mobilePlay').onclick=()=>els.play.click()
+if('IntersectionObserver' in window){
+  new IntersectionObserver(([entry])=>$('#mobilePreview').classList.toggle('is-away',!entry.isIntersecting)).observe(els.play)
+}
+$('#viewBoard').onclick=()=>els.turn.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'})
+for(const event of ['pointerdown','keydown'])document.addEventListener(event,unlockAudio,{capture:true})
+document.addEventListener('keydown',e=>{
+  if(!els.modalLayer.classList.contains('hidden')){
+    if(e.key==='Escape'){e.preventDefault();closeModal();return}
+    if(e.key==='Tab'){
+      const items=[...els.modal.querySelectorAll('button:not(:disabled),input,[tabindex="0"]')].filter(x=>x.getClientRects().length)
+      const first=items[0],last=items.at(-1)
+      if(!first){e.preventDefault();return}
+      if(e.shiftKey&&(document.activeElement===first||document.activeElement===els.modal)){e.preventDefault();last.focus()}
+      else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===els.modal)){e.preventDefault();first.focus()}
+    }
+    return
+  }
+  if(e.key==='Escape'&&!els.game.classList.contains('hidden'))clearPreview()
+  if(e.key==='/'&&!els.game.classList.contains('hidden')&&!/INPUT|TEXTAREA/.test(e.target.tagName)){e.preventDefault();els.search.focus()}
+})
+renderSound()
 buildDemo();buildBoard()
 let initialName=localStorage.getItem('openbook-name')
 if(!initialName){initialName=funnyName();saveName(initialName)}
