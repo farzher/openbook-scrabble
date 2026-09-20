@@ -2,7 +2,7 @@ import Serverless_Lobby from 'https://farzher.com/assets/serverless_lobby.js'
 import {SIZE, PREMIUM, LETTER_SCORES, DISTRIBUTION, Lexicon, generateMoves, createGame, publicState, processAction, keyOfMove, normalizeTimerConfig} from './game.js'
 
 import {sound, toggleSound, soundEnabled, unlockAudio} from './sounds.js'
-import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-bgfix1'
+import {initThreats,updateThreats,prefetchThreats} from './threat-ui.js?v=ev-bgfix2'
 
 const DICTIONARY_URL='https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt'
 const DIRECTORY_CHANNEL='openbook-scrabble:directory'
@@ -19,7 +19,7 @@ const els={
 }
 
 let lex=null,lexPromise=null,lobby=null,room='',myId='',role='',hostGame=null,state=null
-let moves=[],moveByKey=new Map(),moveEv=new Map(),moveRows=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0
+let moves=[],moveByKey=new Map(),moveEv=new Map(),moveRows=new Map(),selected=null,visibleMoves=250,selectedExchange=new Set(),pendingExchange=null,computing=0,evViewportFrame=0
 let directoryWs=null,directoryPulse=null,directoryReconnect=null,timerFrame=0,timerSyncAt=0,animatedRevision=-1,lastTransport='Connecting',directPingMs=null
 const directoryRooms=new Map()
 const DEFAULT_PREFS={mode:'farzher',standardMs:25*60_000,farzherMs:5*60_000,ettRate:.10}
@@ -632,6 +632,26 @@ function bindMoveRows(){
     applyMoveEvRow(moveKey)
   }
 }
+function prefetchVisibleMoveEvs(){
+  if(!state||!moveRows.size)return
+  const viewport=els.moves.getBoundingClientRect()
+  const buffer=Math.max(120,viewport.height*.65)
+  const nearby=[]
+  for(const [moveKey,row] of moveRows){
+    const rect=row.getBoundingClientRect()
+    if(rect.bottom<viewport.top-buffer||rect.top>viewport.bottom+buffer)continue
+    const move=moveByKey.get(moveKey)
+    if(move)nearby.push(move)
+  }
+  if(nearby.length)prefetchThreats(state,nearby,myId)
+}
+function scheduleVisibleMoveEvs(){
+  if(evViewportFrame)return
+  evViewportFrame=requestAnimationFrame(()=>{
+    evViewportFrame=0
+    prefetchVisibleMoveEvs()
+  })
+}
 document.addEventListener('openbook-move-ev',e=>{
   const ev=e.detail
   if(!ev||ev.revision!==state?.revision)return
@@ -675,12 +695,12 @@ function renderMoves(){
         <div class="move-word">${m.word}</div>
         <div class="move-meta">${coord(m)}${m.placements.length===7?' · BINGO':''}</div>
       </div>
-      <div class="move-score"><strong>${m.score}</strong><small data-move-ev>EV…</small></div>
+      <div class="move-score"><small data-move-ev>EV…</small><strong>${m.score}</strong></div>
       <span class="move-ev-progress" aria-hidden="true"><i></i></span>
     </button>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
   bindMoveRows()
-  prefetchThreats(state,shown,myId)
+  scheduleVisibleMoveEvs()
   if(focusedKey){
     const target=[...els.moves.querySelectorAll('[data-key]')].find(b=>b.dataset.key===focusedKey)
     target?.focus({preventScroll:true})
@@ -955,6 +975,7 @@ function moveFromElement(el){
   const moveKey=decodeURIComponent(raw)
   return moveByKey.get(moveKey)||null
 }
+els.moves.addEventListener('scroll',scheduleVisibleMoveEvs,{passive:true})
 els.moves.addEventListener('pointerover',e=>{
   if(e.pointerType==='touch')return
   const row=e.target.closest('.move-row')
