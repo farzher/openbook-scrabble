@@ -560,13 +560,13 @@ async function computeMoves(){
   moveByKey=new Map(moves.map(m=>[keyOfMove(m),m]))
   moveEv.clear()
   renderMoves()
-  prefetchThreats(state,moves,myId)
 }
 function applyMoveEvRow(moveKey){
   const row=moveRows.get(moveKey),ev=moveEv.get(moveKey)
   if(!row||!ev)return
   const diff=ev.diff
-  const strength=Math.min(1,Math.abs(diff)/25)
+  const confidence=Math.min(1,Math.sqrt(Math.max(1,ev.samples||1)/24))
+  const strength=Math.min(1,Math.abs(diff)/25)*confidence
   if(strength<.03){
     row.classList.remove('ev-ready')
     row.style.removeProperty('--move-ev-bg')
@@ -581,7 +581,7 @@ function applyMoveEvRow(moveKey){
     :`linear-gradient(90deg,rgba(255,103,93,${alpha}),rgba(255,103,93,${alpha*.18}) 70%,transparent)`)
   row.style.setProperty('--move-ev-edge',blue?`rgba(91,170,255,${edge})`:`rgba(255,113,103,${edge})`)
   row.classList.add('ev-ready')
-  row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)}`
+  row.title=`Board EV ${ev.you.toFixed(1)} vs ${ev.opponent.toFixed(1)} · ${diff>=0?'+':''}${diff.toFixed(1)} · ${ev.done?'refined':ev.samples+' samples'}`
 }
 function bindMoveRows(){
   moveRows=new Map()
@@ -628,6 +628,7 @@ function renderMoves(){
     </button>`
   }).join('')+(shown.length<list.length?`<button class="more-words" data-more>+${Math.min(250,list.length-shown.length)} more moves</button>`:'')
   bindMoveRows()
+  prefetchThreats(state,shown,myId)
   if(focusedKey){
     const target=[...els.moves.querySelectorAll('[data-key]')].find(b=>b.dataset.key===focusedKey)
     target?.focus({preventScroll:true})
