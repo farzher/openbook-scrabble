@@ -1,6 +1,6 @@
 import {SIZE,applyMove,removeRackTiles} from './game.js'
-import {unseenPool} from './threats.js?v=ev-cache1'
-import {dualCloudPixels} from './heatmap.js?v=ev-cache1'
+import {unseenPool} from './threats.js?v=ev-concurrent1'
+import {dualCloudPixels} from './heatmap.js?v=ev-concurrent1'
 
 const panel=document.querySelector('#threatPanel')
 const status=document.querySelector('#threatStatus')
@@ -17,8 +17,8 @@ tip.hidden=true
 tip.setAttribute('role','tooltip')
 panel?.append(tip)
 
-let worker=null,request=0,key='',resultsKey='',timer=null,context=null,results={},pending={},active=null
-let enabled=true,painted=null,cacheTurn='',cache=new Map()
+let worker=null,request=0,key='',resultsKey='',context=null,results={},pending={},active=null
+let enabled=true,painted=null,cacheTurn='',cache=new Map(),jobs=new Map()
 const SIDES=['you','opponent']
 const CACHE_LIMIT=96
 const canvas=document.createElement('canvas')
@@ -64,24 +64,35 @@ export function initThreats(words){
   if(!panel||!status||!board)return
   if(!('Worker' in window)){unavailable();return}
   try{
-    worker=new Worker(new URL('./threat-worker.js?v=ev-cache1',import.meta.url),{type:'module'})
+    worker=new Worker(new URL('./threat-worker.js?v=ev-concurrent1',import.meta.url),{type:'module'})
     worker.onmessage=({data})=>{
-      if(data.id!==request)return
-      pending[data.side]=data
+      const jobKey=jobs.get(data.id)
+      if(!jobKey)return
+      const entry=cache.get(jobKey)
+      if(!entry)return
 
-      // Do not replace the previous map with a half-new one. Once both sides
-      // have data, promote them together and refine from there.
-      if(SIDES.every(side=>ready(pending[side]))){
-        results={...pending}
-        resultsKey=key
-        paint()
-        renderBoardEv()
+      // Every worker update is cached immediately, including intermediate
+      // 8/16/24/... rack samples. Switching away never discards this progress.
+      entry.sides[data.side]=data
+      entry.updated=performance.now()
+      touchCache(jobKey,entry)
+
+      if(jobKey===key){
+        pending=entry.sides
+        if(SIDES.every(side=>ready(pending[side]))){
+          results={...pending}
+          resultsKey=key
+          painted=null
+          paint()
+          renderBoardEv()
+        }
+        updateStatus(entry)
       }
-      updateStatus()
 
-      if(SIDES.every(side=>complete(pending[side]))){
-        remember(key,resultsKey===key?results:{...pending})
-        board.classList.remove('heat-loading')
+      if(SIDES.every(side=>complete(entry.sides))){
+        entry.done=true
+        jobs.delete(data.id)
+        if(jobKey===key)board.classList.remove('heat-loading')
       }
     }
     worker.onerror=event=>{
@@ -96,22 +107,36 @@ export function initThreats(words){
   }
 }
 
-function remember(cacheKey,value){
-  if(!cacheKey||!SIDES.every(side=>value?.[side]))return
+function touchCache(cacheKey,entry){
+  if(!cacheKey)return
   if(cache.has(cacheKey))cache.delete(cacheKey)
-  cache.set(cacheKey,value)
-  while(cache.size>CACHE_LIMIT)cache.delete(cache.keys().next().value)
+  cache.set(cacheKey,entry)
+  while(cache.size>CACHE_LIMIT){
+    const oldest=cache.keys().next().value
+    const old=cache.get(oldest)
+    if(old?.id)jobs.delete(old.id)
+    cache.delete(oldest)
+  }
 }
 function resetTurnCache(turnKey){
   if(cacheTurn===turnKey)return
   cacheTurn=turnKey
+  // A real turn change invalidates every hypothetical position. This is the
+  // only time we globally cancel worker calculations.
+  worker?.postMessage({type:'cancel'})
   cache.clear()
+  jobs.clear()
+  results={}
+  pending={}
+  resultsKey=''
+  painted=null
 }
-function updateStatus(){
-  const failed=SIDES.some(side=>pending[side]?.error)
-  const busy=!SIDES.every(side=>complete(pending[side]))
+function updateStatus(entry=cache.get(key)){
+  const sides=entry?.sides||pending
+  const failed=SIDES.some(side=>sides[side]?.error)
+  const busy=!SIDES.every(side=>complete(sides[side]))
   if(failed)setStatus('error','Some EV data is unavailable')
-  else if(busy)setStatus('busy',resultsKey===key?'Refining EV':'Calculating EV')
+  else if(busy)setStatus('busy',SIDES.every(side=>ready(sides[side]))?'Refining EV':'Calculating EV')
   else setStatus('ready','')
 }
 function ensureHeatShell(){
@@ -204,6 +229,7 @@ export function updateThreats(state,selected,myId){
     resultsKey=''
     results={}
     pending={}
+    jobs.clear()
     hideTip()
     hideHeatmap()
     renderBoardEv()
@@ -221,30 +247,33 @@ export function updateThreats(state,selected,myId){
   }
 
   key=next
-  request++
-  clearTimeout(timer)
-  worker?.postMessage({type:'cancel'})
-  pending={}
   hideTip()
 
-  // Keep the previously-rendered cloud while the new position is calculated.
-  // On the first analysis, enter the dark heatmap shell immediately.
+  // If this preview was already started, restore its latest partial heatmap
+  // immediately. Its worker job has continued running while it was off-screen.
+  const cached=cache.get(key)
+  if(cached){
+    touchCache(key,cached)
+    pending=cached.sides
+    if(SIDES.every(side=>ready(pending[side]))){
+      results={...pending}
+      resultsKey=key
+      painted=null
+      paint()
+      renderBoardEv()
+    }else{
+      ensureHeatShell()
+      panel.classList.add('ev-stale')
+    }
+    updateStatus(cached)
+    return
+  }
+
+  // Brand-new preview: preserve the currently painted map until both sides
+  // have their first partial result, then swap to the new map atomically.
   ensureHeatShell()
   panel.classList.add('ev-stale')
   setStatus('busy','Calculating EV')
-
-  const cached=cache.get(key)
-  if(cached){
-    results=cached
-    resultsKey=key
-    pending={...cached}
-    painted=null
-    paint()
-    renderBoardEv()
-    panel.classList.remove('ev-stale')
-    setStatus('ready','')
-    return
-  }
 
   const mine=state.players.find(p=>p.id===myId)
   if(selected&&state.bagCount===0&&selected.placements.length===mine?.rack.length){
@@ -252,28 +281,30 @@ export function updateThreats(state,selected,myId){
     return
   }
 
+  const id=++request
+  const entry={id,sides:{},done:false,updated:performance.now()}
+  touchCache(key,entry)
+  jobs.set(id,key)
+
   // Played tiles remain unavailable to both hypothetical racks.
   const pool=unseenPool(state.board,mine?.rack||[])
-  const id=request
-  timer=setTimeout(()=>{
-    if(!worker){unavailable();return}
-    for(const side of SIDES){
-      const kept=side==='you'
-        ?(selected?removeRackTiles(mine?.rack||[],selected.placements):mine?.rack||[])
-        :[]
-      const size=side==='you'
-        ?(selected?Math.min(state.bagCount,7-kept.length):0)
-        :state.players.find(p=>p.id!==myId)?.rackCount||0
-      worker.postMessage({
-        id,
-        side,
-        board:selected?applyMove(state.board,selected.placements):state.board,
-        pool,
-        size,
-        kept
-      })
-    }
-  },70)
+  if(!worker){unavailable();return}
+  for(const side of SIDES){
+    const kept=side==='you'
+      ?(selected?removeRackTiles(mine?.rack||[],selected.placements):mine?.rack||[])
+      :[]
+    const size=side==='you'
+      ?(selected?Math.min(state.bagCount,7-kept.length):0)
+      :state.players.find(p=>p.id!==myId)?.rackCount||0
+    worker.postMessage({
+      id,
+      side,
+      board:selected?applyMove(state.board,selected.placements):state.board,
+      pool,
+      size,
+      kept
+    })
+  }
 }
 
 board?.addEventListener('pointermove',e=>{
