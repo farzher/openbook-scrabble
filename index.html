@@ -8,7 +8,7 @@
   <meta name="description" content="Scrabble with the wordbook open.">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./polish.css">
-  <link rel="stylesheet" href="./threats.css">
+  <link rel="stylesheet" href="./threats.css?v=ev3">
 </head>
 <body>
 <div id="app">
@@ -97,11 +97,10 @@
             <span>Future moves</span>
             <b id="threatPhase">Current board</b>
           </div>
-          <div class="forecast-legend" aria-label="Left marker is you; right marker is opponent; color is top score; size is chance">
+          <div class="forecast-legend" aria-label="Left half is you; right half is opponent; color shows expected value">
             <span class="side-you"><i></i>You</span>
             <span class="side-opponent"><i></i>Opponent</span>
-            <span class="score-scale"><i></i><small>score</small></span>
-            <span class="chance-scale"><i></i><small>chance</small></span>
+            <span class="ev-scale"><i></i><small>low EV</small><b>high EV</b></span>
           </div>
           <span id="threatStatus" role="status">Sampling</span>
         </section>
@@ -141,6 +140,6 @@
   <div class="modal-layer hidden" id="modalLayer"><div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game dialog" tabindex="-1"></div></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
-<script type="module" src="./app.js"></script>
+<script type="module" src="./app.js?v=ev3"></script>
 </body>
 </html>
